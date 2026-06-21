@@ -1,0 +1,16 @@
+# 工具設定
+.claude/
+
+# 草稿/來源圖（執行時不需要）
+/291f615c-*.png
+/96d1fe71-*.jpg
+
+# 麻將 3D 版以內嵌 base64 sprite + assets/ 為主，下列未被使用（省 ~20MB）
+games/mahjong/images/
+games/mahjong/tiles-sprite.css
+
+# 暫存 / OS
+_*.png
+*.log
+.DS_Store
+Thumbs.db

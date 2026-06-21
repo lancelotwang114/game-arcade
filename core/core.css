@@ -1,0 +1,118 @@
+/* 牌桌遊戲廳 — 共用樣式 + 主題變數 + 撲克牌面 + UI 元件 */
+:root {
+  --bg: #0d1411; --bg2: #16201b;
+  --felt: #1f5c3f; --felt-d: #15402c;
+  --gold: #d4a843; --gold2: #e8c56a;
+  --ink: #f3efe2; --muted: #b4c2b8;
+  --card-bg: #faf7ef; --card-ink: #1a1a1a; --card-red: #c0392b;
+  --line: rgba(255,255,255,.1);
+}
+
+/* 鍵盤焦點環（全域） */
+a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-visible,
+.game-card:focus-visible, .tx-act:focus-visible {
+  outline: 3px solid var(--gold2); outline-offset: 2px; border-radius: 8px;
+}
+/* 降低動態偏好：關閉非必要動畫 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
+[data-theme="noir"] { --bg:#0a0a0d; --bg2:#15151c; --felt:#2a2740; --felt-d:#1d1d2e; --gold:#b9a0e0; --gold2:#d3c2ef; }
+[data-theme="jade"] { --bg:#08110d; --bg2:#0f1d16; --felt:#0f6b4f; --felt-d:#0a4d39; --gold:#5fd3a0; --gold2:#8ee8c2; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: radial-gradient(120% 120% at 50% 0%, var(--bg2), var(--bg));
+  color: var(--ink);
+  font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* ---------- 大廳 ---------- */
+#lobby { height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 4vh 4vw; overflow-y: auto; }
+.lobby-title { font-size: clamp(28px, 5vw, 52px); font-weight: 800; letter-spacing: .15em;
+  background: linear-gradient(180deg, var(--gold2), var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; margin: 1vh 0 .4vh; }
+.lobby-sub { color: var(--muted); margin-bottom: 4vh; letter-spacing: .2em; font-size: 14px; }
+#game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 260px)); gap: 24px; width: 100%; max-width: 880px; justify-content: center; }
+.game-card { background: linear-gradient(160deg, var(--bg2), var(--felt-d)); border: 1px solid var(--line);
+  border-radius: 18px; padding: 28px 20px; cursor: pointer; color: var(--ink); text-align: center;
+  transition: transform .18s, box-shadow .18s, border-color .18s; font-family: inherit; }
+.game-card:hover { transform: translateY(-6px); border-color: var(--gold); box-shadow: 0 12px 30px rgba(0,0,0,.45), 0 0 0 1px var(--gold) inset; }
+.gc-icon { font-size: 56px; line-height: 1; margin-bottom: 14px; }
+.gc-name { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.gc-desc { font-size: 14px; color: var(--muted); min-height: 34px; }
+.gc-players { font-size: 12px; color: var(--gold); margin-top: 10px; letter-spacing: .1em; }
+.gc-btns { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+.gc-btns button { flex: 1; padding: 9px 0; border-radius: 9px; border: 1px solid var(--line); cursor: pointer;
+  font-family: inherit; font-size: 14px; transition: .15s; min-height: 44px; }
+.gc-go { background: linear-gradient(180deg, var(--gold2), var(--gold)); color: #2a1d05; font-weight: 700; border: 0 !important; }
+.gc-online { background: var(--bg2); color: var(--gold2); }
+.gc-btns button:hover { filter: brightness(1.1); border-color: var(--gold); }
+
+/* ---------- 遊戲台容器 ---------- */
+#stage { display: none; position: fixed; inset: 0; }
+.game-frame { width: 100%; height: 100%; border: 0; display: block; }
+#back-bar { display: none; position: fixed; top: 0; left: 0; right: 0; height: 0; z-index: 50; }
+#back-btn { position: fixed; top: 12px; left: 12px; z-index: 60; background: rgba(0,0,0,.55);
+  color: var(--gold2); border: 1px solid var(--gold); border-radius: 10px; padding: 8px 16px; cursor: pointer; font-size: 14px; font-family: inherit;
+  min-height: 44px; display: inline-flex; align-items: center; }
+#back-btn:hover { background: rgba(0,0,0,.8); }
+
+/* ---------- 通用按鈕 ---------- */
+.btn { background: var(--bg2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 20px; font-size: 15px; cursor: pointer; font-family: inherit; transition: .15s;
+  min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+.btn:hover { border-color: var(--gold); }
+.btn-primary { background: linear-gradient(180deg, var(--gold2), var(--gold)); color: #2a1d05; font-weight: 700; border: 0; }
+
+/* ---------- toast ---------- */
+#toast-host { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.toast { background: rgba(0,0,0,.82); color: var(--ink); border: 1px solid var(--gold); border-radius: 12px;
+  padding: 10px 18px; font-size: 15px; opacity: 0; transform: translateY(-12px); transition: .3s; }
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* ---------- modal ---------- */
+.modal-ov { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center;
+  z-index: 150; opacity: 0; transition: .25s; }
+.modal-ov.show { opacity: 1; }
+.modal-box { background: linear-gradient(160deg, var(--bg2), var(--felt-d)); border: 1px solid var(--gold);
+  border-radius: 18px; padding: 28px 32px; min-width: 320px; max-width: 90vw; text-align: center; transform: scale(.94); transition: .25s; }
+.modal-ov.show .modal-box { transform: scale(1); }
+.modal-title { margin: 0 0 14px; color: var(--gold2); font-size: 24px; }
+.modal-body { color: var(--ink); font-size: 15px; line-height: 1.7; }
+.modal-btns { display: flex; gap: 12px; justify-content: center; margin-top: 22px; flex-wrap: wrap; }
+
+/* ---------- confetti ---------- */
+.confetti-p { position: fixed; width: 9px; height: 9px; border-radius: 2px; z-index: 220; pointer-events: none;
+  animation: confettiFly var(--dur, 1s) ease-out forwards; }
+@keyframes confettiFly { to { transform: translate(var(--dx), var(--dy)) rotate(540deg); opacity: 0; } }
+
+/* ---------- 撲克牌面（cards.js） ---------- */
+.pcard { width: 64px; height: 90px; background: var(--card-bg); color: var(--card-ink); border-radius: 8px;
+  position: relative; box-shadow: 0 2px 6px rgba(0,0,0,.4); border: 1px solid #ddd; flex-shrink: 0; user-select: none; }
+.pcard.red { color: var(--card-red); }
+.pc-corner { position: absolute; font-size: 14px; font-weight: 700; line-height: 1; text-align: center; }
+.pc-corner i { display: block; font-style: normal; font-size: 13px; }
+.pc-tl { top: 5px; left: 5px; }
+.pc-br { bottom: 5px; right: 5px; transform: rotate(180deg); }
+.pc-pip { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 34px; }
+.pcard.big .pc-big { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 38px; font-weight: 800; color: #1a1a1a; font-family: 'Oswald', system-ui, sans-serif; }
+.pcard.big.joker .pc-big { font-size: 46px; color: #c0392b; font-family: 'Noto Sans TC', sans-serif; }
+.pcard.back { background: repeating-linear-gradient(45deg, #6b1f1f, #6b1f1f 6px, #8a2a2a 6px, #8a2a2a 12px);
+  border: 2px solid #c9a24a; }
+.pcard.sel { transform: translateY(-14px); box-shadow: 0 8px 18px rgba(0,0,0,.5), 0 0 0 2px var(--gold); }
+
+/* ---------- 連線開房面板（共用） ---------- */
+.net-room { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  background: linear-gradient(160deg, var(--bg2), var(--felt-d)); border: 1px solid var(--gold);
+  border-radius: 18px; padding: 28px 34px; min-width: 360px; max-width: 92vw; text-align: center; }
+.net-room h2 { margin: 0 0 18px; color: var(--gold2); }
+.net-code { font-size: 18px; margin-bottom: 14px; }
+.net-code b { color: var(--gold2); letter-spacing: .15em; font-size: 22px; }
+.net-url { display: flex; gap: 8px; margin-bottom: 16px; }
+.net-url input { flex: 1; background: rgba(0,0,0,.4); border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+.net-list { list-style: none; padding: 0; margin: 0 0 12px; text-align: left; display: inline-block; }
+.net-list li { padding: 5px 0; font-size: 15px; }
+.net-hint { color: var(--muted); font-size: 13px; margin: 8px 0 18px; }
