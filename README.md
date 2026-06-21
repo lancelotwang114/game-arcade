@@ -2,7 +2,7 @@
 
 > 純前端、零建置的多人/單機桌遊平台。一個大廳，三款博弈娛樂，挑了就玩。
 
-線上展示：部署到 GitHub Pages 後即 `https://<使用者>.github.io/<repo>/`
+🔗 **線上遊玩**：https://lancelotwang114.github.io/game-arcade/
 
 ## 遊戲
 
@@ -31,9 +31,13 @@ python -m http.server 8080
 
 ## 部署到 GitHub Pages
 
-1. 推到 GitHub repo
-2. Settings → Pages → Build and deployment → Source 選 **Deploy from a branch**，Branch 選 `main` / `/ (root)`
-3. 等一兩分鐘，開 Pages 給的網址
+1. 在 GitHub 建空 repo `lancelotwang114/game-arcade`（不勾 README/.gitignore/license）
+2. 推送：
+   ```bash
+   git push -u origin main
+   ```
+3. Settings → Pages → Source: **Deploy from a branch** → `main` / `(root)` → Save
+4. 一兩分鐘後開 **https://lancelotwang114.github.io/game-arcade/**
 
 （已附 `.nojekyll`，確保所有檔案原樣提供。）
 
