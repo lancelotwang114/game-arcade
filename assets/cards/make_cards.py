@@ -22,6 +22,8 @@ f_joker = F('arialbd.ttf', 34)
 ROW_TOP = {'D': 786, 'A': 18, 'B': 274, 'C': 530}
 COURT_CX = {'K': 798, 'Q': 1020, 'J': 1241}
 CB_W, CB_H = 158, 221
+# B（山水雅韻）牌背：來源圖已有完整水墨山水+邊框設計，直接裁切使用（原本用程式畫圓圈+色塊太陽春）
+BACK_CROP_BOX = {'B': (277, 296, 435, 517)}
 
 # 各風格：輸出後綴、牌底色、黑花色色、紅花色色、Joker 底色
 STYLES = {
@@ -113,10 +115,12 @@ def make_back(key):
         for r in range(18, 150, 20):
             d.rectangle([cx - r, cy - r, cx + r, cy + r], outline=(216, 177, 90, 110), width=1)
         glyph = '◆'
-    else:  # B 水墨
-        d.ellipse([cx - 72, cy - 72, cx + 72, cy + 72], outline=(70, 70, 70, 150), width=3)
-        d.rectangle([cx - 16, cy + 78, cx + 16, cy + 112], fill=(170, 50, 45, 255))
-        gcol = (70, 70, 70, 255)
+    elif key == 'B':  # B 水墨山水：直接用來源圖的山水畫背面裁切，程式畫的圓圈+色塊太陽春
+        box = BACK_CROP_BOX['B']
+        crop = src.convert('RGBA').crop(box).resize((CW, CH), Image.LANCZOS)
+        ImageDraw.Draw(crop).rounded_rectangle([1, 1, CW - 2, CH - 2], radius=22, outline=gold, width=3)
+        crop.putalpha(_mask)
+        return crop
     if glyph:
         g = text_img(glyph, F('seguisym.ttf', 104), gcol)
         im.alpha_composite(g, ((CW - g.width) // 2, (CH - g.height) // 2))
