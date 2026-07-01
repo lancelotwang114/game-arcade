@@ -1,5 +1,7 @@
 # 工具設定
 .claude/
+agentic-sop-kit/
+__pycache__/
 
 # 草稿/來源圖（執行時不需要）
 /291f615c-*.png
