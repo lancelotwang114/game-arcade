@@ -21,6 +21,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
 [data-theme="jade"] { --bg:#08110d; --bg2:#0f1d16; --felt:#0f6b4f; --felt-d:#0a4d39; --gold:#5fd3a0; --gold2:#8ee8c2; }
 
 * { box-sizing: border-box; }
+button, a, input, [tabindex] { touch-action: manipulation; }
 html, body { margin: 0; height: 100%; }
 body {
   background: radial-gradient(120% 120% at 50% 0%, var(--bg2), var(--bg));
