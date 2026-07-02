@@ -19,11 +19,19 @@ f_pip, f_pip_big = F('arial.ttf', 60), F('arial.ttf', 132)
 f_joker = F('arialbd.ttf', 34)
 
 # 來源圖座標：各風格那一列的牌上緣 y、宮廷牌水平中心、背牌框
-ROW_TOP = {'D': 786, 'A': 18, 'B': 274, 'C': 530}
+ROW_TOP = {'D': 786, 'A': 18, 'B': 274, 'C': 530, 'E': 786}
 COURT_CX = {'K': 798, 'Q': 1020, 'J': 1241}
 CB_W, CB_H = 158, 221
-# B（山水雅韻）牌背：來源圖已有完整水墨山水+邊框設計，直接裁切使用（原本用程式畫圓圈+色塊太陽春）
-BACK_CROP_BOX = {'B': (277, 296, 435, 517)}
+# 牌背直接從來源設計稿裁切（座標經人工逐張確認），程式畫的佔位圖風格對不上
+# (x0, y0, x1, y1)
+BACK_CROP_BOX = {
+    'D': (285, 806, 475, 1014),
+    'A': (280, 10, 480, 275),
+    'B': (289, 301, 470, 528),
+    'C': (287, 568, 454, 764),
+}
+# D 牌背下緣白色卡緣帶混入「背面」說明文字，這條 y（來源座標）以下整帶抹白
+BACK_D_TEXT_Y = 1006
 
 # 各風格：輸出後綴、牌底色、黑花色色、紅花色色、Joker 底色
 STYLES = {
@@ -31,6 +39,8 @@ STYLES = {
     'A': {'suffix': '_A', 'bg': (244, 238, 222, 255), 'blk': (26, 34, 64, 255),  'red': (150, 42, 42, 255)},
     'B': {'suffix': '_B', 'bg': (240, 236, 226, 255), 'blk': (38, 38, 38, 255),  'red': (150, 60, 55, 255)},
     'C': {'suffix': '_C', 'bg': (238, 230, 210, 255), 'blk': (30, 42, 38, 255),  'red': (150, 50, 45, 255)},
+    # E 簡約：牌面同經典配色，牌背用程式畫的編織紋（原本 D 的畫法）
+    'E': {'suffix': '_E', 'bg': (250, 247, 238, 255), 'blk': (26, 26, 26, 255),  'red': (192, 57, 43, 255)},
 }
 
 _mask = Image.new('L', (CW, CH), 0)
@@ -89,41 +99,30 @@ def court_crop(rank, top):
 
 
 def make_back(key):
-    """程式渲染各風格牌背（保證置中對齊）。"""
-    base = {'D': (36, 59, 107, 255), 'A': (24, 30, 66, 255), 'B': (238, 232, 220, 255), 'C': (17, 45, 35, 255)}[key]
+    """D/A/B/C 直接裁來源設計稿的牌背；E 簡約版用程式畫。"""
     gold = (216, 177, 90, 255)
-    line = (70, 70, 70, 90) if key == 'B' else (255, 255, 255, 40)
+    if key in BACK_CROP_BOX:
+        x0, y0, x1, y1 = BACK_CROP_BOX[key]
+        crop = src.convert('RGBA').crop((x0, y0, x1, y1))
+        if key == 'D':  # 抹掉下緣白邊帶混入的「背面」文字
+            d = ImageDraw.Draw(crop)
+            d.rectangle([0, BACK_D_TEXT_Y - y0, crop.width, crop.height], fill=(245, 245, 245, 255))
+        crop = crop.resize((CW, CH), Image.LANCZOS)
+        if key == 'B':  # B 卡緣偏淡，補一圈金色描邊跟其他款一致
+            ImageDraw.Draw(crop).rounded_rectangle([1, 1, CW - 2, CH - 2], radius=22, outline=gold, width=3)
+        crop.putalpha(_mask)
+        return crop
+    # E 簡約：深藍底 + 對角編織紋 + 金色黑桃
+    base = (36, 59, 107, 255)
+    line = (255, 255, 255, 40)
     im = Image.new('RGBA', (CW, CH), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     d.rounded_rectangle([1, 1, CW - 2, CH - 2], radius=22, fill=base, outline=gold, width=3)
     d.rounded_rectangle([16, 16, CW - 16, CH - 16], radius=14, outline=gold, width=2)
-    cx, cy = CW // 2, CH // 2
-    glyph, gcol = '', gold
-    if key == 'D':
-        for i in range(-CH, CW + CH, 26):
-            d.line([(i, 18), (i + CH, CH - 18)], fill=line); d.line([(i, CH - 18), (i + CH, 18)], fill=line)
-        glyph = '♠'
-    elif key == 'A':
-        for r in (42, 74, 106, 138):
-            d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(216, 177, 90, 120), width=1)
-        random.seed(7)
-        for _ in range(70):
-            x, y = random.randint(26, CW - 26), random.randint(26, CH - 26)
-            d.ellipse([x, y, x + 2, y + 2], fill=(255, 255, 255, 150))
-        glyph = '☾'
-    elif key == 'C':
-        for r in range(18, 150, 20):
-            d.rectangle([cx - r, cy - r, cx + r, cy + r], outline=(216, 177, 90, 110), width=1)
-        glyph = '◆'
-    elif key == 'B':  # B 水墨山水：直接用來源圖的山水畫背面裁切，程式畫的圓圈+色塊太陽春
-        box = BACK_CROP_BOX['B']
-        crop = src.convert('RGBA').crop(box).resize((CW, CH), Image.LANCZOS)
-        ImageDraw.Draw(crop).rounded_rectangle([1, 1, CW - 2, CH - 2], radius=22, outline=gold, width=3)
-        crop.putalpha(_mask)
-        return crop
-    if glyph:
-        g = text_img(glyph, F('seguisym.ttf', 104), gcol)
-        im.alpha_composite(g, ((CW - g.width) // 2, (CH - g.height) // 2))
+    for i in range(-CH, CW + CH, 26):
+        d.line([(i, 18), (i + CH, CH - 18)], fill=line); d.line([(i, CH - 18), (i + CH, 18)], fill=line)
+    g = text_img('♠', F('seguisym.ttf', 104), gold)
+    im.alpha_composite(g, ((CW - g.width) // 2, (CH - g.height) // 2))
     return im
 
 

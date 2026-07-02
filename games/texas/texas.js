@@ -524,7 +524,7 @@ if (typeof Platform !== 'undefined') {
     if (sb) sb.onclick = () => Platform.ui.modal({
       title: '選擇牌面風格',
       html: '即時切換（會記住）',
-      buttons: ['D', 'A', 'B', 'C'].map(k => ({
+      buttons: Object.keys(Platform.cards.STYLE_NAMES).map(k => ({
         label: Platform.cards.STYLE_NAMES[k] + (Platform.cards.style === k ? ' ✓' : ''),
         primary: Platform.cards.style === k,
         onClick: c => { c(); Platform.cards.setStyle(k); this.render(); },
