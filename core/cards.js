@@ -48,8 +48,8 @@ Platform.cards = {
   SHEET: 'assets/cards/cards_sheet.png',
   BACK: 'assets/cards/back.png',
   style: 'D',
-  _STYLE_SFX: { D: '', A: '_A', B: '_B', C: '_C', E: '_E' },
-  STYLE_NAMES: { D: '經典標準', A: '星辰夜空', B: '山水雅韻', C: '復古 Art Deco', E: '簡約' },
+  _STYLE_SFX: { D: '', A: '_A', B: '_B', C: '_C', E: '_E', F: '_F' },
+  STYLE_NAMES: { D: '經典標準', A: '星辰夜空', B: '山水雅韻', C: '復古 Art Deco', E: '簡約', F: '極簡' },
   setStyle(k) {
     if (!(k in this._STYLE_SFX)) k = 'D';
     this.style = k; const s = this._STYLE_SFX[k];

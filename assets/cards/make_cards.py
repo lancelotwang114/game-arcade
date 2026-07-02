@@ -19,7 +19,7 @@ f_pip, f_pip_big = F('arial.ttf', 60), F('arial.ttf', 132)
 f_joker = F('arialbd.ttf', 34)
 
 # 來源圖座標：各風格那一列的牌上緣 y、宮廷牌水平中心、背牌框
-ROW_TOP = {'D': 786, 'A': 18, 'B': 274, 'C': 530, 'E': 786}
+ROW_TOP = {'D': 786, 'A': 18, 'B': 274, 'C': 530, 'E': 786, 'F': 786}
 COURT_CX = {'K': 798, 'Q': 1020, 'J': 1241}
 CB_W, CB_H = 158, 221
 # 牌背直接從來源設計稿裁切（座標經人工逐張確認），程式畫的佔位圖風格對不上
@@ -41,6 +41,8 @@ STYLES = {
     'C': {'suffix': '_C', 'bg': (238, 230, 210, 255), 'blk': (30, 42, 38, 255),  'red': (150, 50, 45, 255)},
     # E 簡約：牌面同經典配色，牌背用程式畫的編織紋（原本 D 的畫法）
     'E': {'suffix': '_E', 'bg': (250, 247, 238, 255), 'blk': (26, 26, 26, 255),  'red': (192, 57, 43, 255)},
+    # F 極簡：素色牌背無圖案；牌面只有大字 rank + 角落小花色（花色是牌局判定必需，只縮不刪）
+    'F': {'suffix': '_F', 'bg': (252, 252, 250, 255), 'blk': (30, 30, 30, 255),  'red': (200, 60, 50, 255), 'plain': True},
 }
 
 _mask = Image.new('L', (CW, CH), 0)
@@ -112,6 +114,13 @@ def make_back(key):
             ImageDraw.Draw(crop).rounded_rectangle([1, 1, CW - 2, CH - 2], radius=22, outline=gold, width=3)
         crop.putalpha(_mask)
         return crop
+    if key == 'F':  # F 極簡：素色底 + 細白邊，無任何圖案
+        im = Image.new('RGBA', (CW, CH), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.rounded_rectangle([1, 1, CW - 2, CH - 2], radius=22, fill=(42, 66, 92, 255),
+                            outline=(255, 255, 255, 200), width=3)
+        im.putalpha(_mask)
+        return im
     # E 簡約：深藍底 + 對角編織紋 + 金色黑桃
     base = (36, 59, 107, 255)
     line = (255, 255, 255, 40)
@@ -128,6 +137,12 @@ def make_back(key):
 
 def make_card(rank, suit, st, top):
     color = st['red'] if suit in ('H', 'D') else st['blk']
+    if st.get('plain'):  # F 極簡：白底 + 置中大字 rank + 角落 rank/小花色，無點陣無宮廷圖
+        card = blank_card(st['bg'])
+        corner(card, rank, suit, color)
+        big = text_img(rank, F('arialbd.ttf', 150 if rank != '10' else 120), color)
+        paste_center(card, big, CW * 0.5, CH * 0.5)
+        return card
     if rank in ('J', 'Q', 'K'):
         card = court_crop(rank, top)
         if suit != 'S':
