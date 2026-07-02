@@ -2011,11 +2011,15 @@ async function sliceSprite(url, count, opts) {
   return out;
 }
 
-function loadTex(url) {
+function loadTex(url, _retried) {
   return new Promise((res, rej) => {
     new THREE.TextureLoader().load(url, tex => {
       tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; res(tex);
-    }, undefined, rej);
+    }, undefined, () => {
+      // THREE 的 error event 沒 message；具名報錯 + 失敗自動重試一次（大圖行動網路易閃斷）
+      if (_retried) rej(new Error('load fail: ' + url));
+      else setTimeout(() => loadTex(url, true).then(res, rej), 800);
+    });
   });
 }
 
