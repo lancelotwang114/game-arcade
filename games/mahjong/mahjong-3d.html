@@ -9946,6 +9946,10 @@ async function init() {
   const lobbyEl = document.getElementById('lobby');
   if (lobbyEl) lobbyEl.style.display = 'flex';
 
+  // 平台大廳「連線」進場 ?online=1 → 直接開連線對戰畫面
+  try {
+    if (new URLSearchParams(location.search).get('online') === '1') Lobby.showOnline();
+  } catch (e) {}
   // 邀請連結 ?room&host → 自動切到「加入」畫面並帶入連結（模組為 deferred，DOM 已就緒）
   try {
     const _ip = new URLSearchParams(location.search);

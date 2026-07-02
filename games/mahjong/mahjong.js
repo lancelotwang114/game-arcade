@@ -5,10 +5,16 @@ Platform.register({
   icon: '🀄',
   desc: '3D 立體牌桌，16 張台灣麻將 + 完整台型',
   players: { min: 4, max: 4 },
+  online: true, // 連線流程在 iframe 內（自帶 PeerJS 房間），平台只負責帶參數進場
   _frame: null,
-  mount(stage) {
+  mount(stage, opts = {}) {
     const f = document.createElement('iframe');
-    f.src = 'games/mahjong/mahjong-3d.html';
+    let src = 'games/mahjong/mahjong-3d.html';
+    if (opts.online) {
+      src += opts.join ? `?room=${encodeURIComponent(opts.join.room)}&host=${encodeURIComponent(opts.join.host)}`
+                       : '?online=1';
+    }
+    f.src = src;
     f.className = 'game-frame';
     stage.appendChild(f);
     this._frame = f;
