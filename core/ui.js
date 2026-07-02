@@ -1,7 +1,7 @@
 /* 共用 UI：toast / modal / 粒子 / 視窗縮放 */
 Platform.toast = function (msg, ms = 1800) {
   let host = document.getElementById('toast-host');
-  if (!host) { host = document.createElement('div'); host.id = 'toast-host'; document.body.appendChild(host); }
+  if (!host) { host = document.createElement('div'); host.id = 'toast-host'; host.setAttribute('aria-live', 'polite'); document.body.appendChild(host); }
   const t = document.createElement('div');
   t.className = 'toast'; t.textContent = msg;
   host.appendChild(t);
@@ -29,8 +29,17 @@ Platform.ui = {
     box.appendChild(row);
     ov.appendChild(box);
     document.body.appendChild(ov);
+    const prevFocus = document.activeElement;
     requestAnimationFrame(() => ov.classList.add('show'));
-    function close() { ov.classList.remove('show'); setTimeout(() => ov.remove(), 250); }
+    const first = row.querySelector('.btn-primary') || row.querySelector('button');
+    if (first) first.focus();
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    function close() {
+      document.removeEventListener('keydown', onKey);
+      ov.classList.remove('show'); setTimeout(() => ov.remove(), 250);
+      if (prevFocus && prevFocus.focus) prevFocus.focus();
+    }
     return { el: box, close };
   },
 

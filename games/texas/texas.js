@@ -503,7 +503,7 @@ if (typeof Platform !== 'undefined') {
         <button class="tx-act call" id="tx-call">${callLabel}</button>
         ${L.raise ? `<div class="tx-raisebox">
           <div class="tx-presets"><button data-v="${half}">½ 底池</button><button data-v="${full}">底池</button></div>
-          <div class="tx-sliderow"><input type="range" id="tx-rng" min="${L.minRaise}" max="${L.maxRaise}" value="${L.minRaise}" step="${this.BB}"><span id="tx-rval">${L.minRaise}</span></div>
+          <div class="tx-sliderow"><input type="range" id="tx-rng" aria-label="加注金額" min="${L.minRaise}" max="${L.maxRaise}" value="${L.minRaise}" step="${this.BB}"><span id="tx-rval">${L.minRaise}</span></div>
           <div class="tx-raisebtns"><button class="tx-act raise" id="tx-raise">加注</button><button class="tx-act allin" id="tx-allin">All-in ${L.maxRaise}</button></div>
         </div>` : ''}`;
       root.querySelector('#tx-fold').onclick = () => send('fold');

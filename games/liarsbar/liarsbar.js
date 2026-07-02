@@ -433,11 +433,19 @@ if (typeof Platform !== 'undefined') {
     me.hand.forEach((c, i) => {
       const e = Platform.cards.bigEl(this.face(c.r), { joker: c.r === 'JOKER' });
       if (this._sel.has(i)) e.classList.add('sel');
-      if (myTurn) e.onclick = () => {
-        if (this._sel.has(i)) this._sel.delete(i);
-        else { if (this._sel.size >= 3) return Platform.toast('最多蓋 3 張'); this._sel.add(i); }
-        this.render();
-      };
+      if (myTurn) {
+        const toggle = () => {
+          if (this._sel.has(i)) this._sel.delete(i);
+          else { if (this._sel.size >= 3) return Platform.toast('最多蓋 3 張'); this._sel.add(i); }
+          this.render();
+        };
+        e.onclick = toggle;
+        e.tabIndex = 0;
+        e.setAttribute('role', 'button');
+        e.setAttribute('aria-pressed', this._sel.has(i) ? 'true' : 'false');
+        e.setAttribute('aria-label', `手牌 ${this.face(c.r)}`);
+        e.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } };
+      }
       handEl.appendChild(e);
     });
 

@@ -121,7 +121,7 @@
   border: 1px solid rgba(216,177,90,.3); border-radius: 14px; padding: 10px 14px; }
 .tx-presets { display: flex; gap: 8px; }
 .tx-presets button { flex: 1; font-family: var(--o); font-size: 14px; letter-spacing: .04em; cursor: pointer;
-  background: rgba(255,255,255,.06); color: var(--brass-2); border: 1px solid rgba(216,177,90,.3); border-radius: 8px; padding: 6px 10px; min-height: 40px; }
+  background: rgba(255,255,255,.06); color: var(--brass-2); border: 1px solid rgba(216,177,90,.3); border-radius: 8px; padding: 6px 10px; min-height: 44px; }
 .tx-presets button:hover { background: rgba(216,177,90,.18); }
 .tx-sliderow { display: flex; align-items: center; gap: 10px; }
 .tx-sliderow input[type=range] { width: 200px; accent-color: var(--brass); }

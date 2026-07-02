@@ -10,7 +10,7 @@
 
 /* 鍵盤焦點環（全域） */
 a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-visible,
-.game-card:focus-visible, .tx-act:focus-visible {
+.tx-act:focus-visible {
   outline: 3px solid var(--gold2); outline-offset: 2px; border-radius: 8px;
 }
 /* 降低動態偏好：關閉非必要動畫 */
@@ -37,7 +37,7 @@ body {
 .lobby-sub { color: var(--muted); margin-bottom: 4vh; letter-spacing: .2em; font-size: 14px; }
 #game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 260px)); gap: 24px; width: 100%; max-width: 880px; justify-content: center; }
 .game-card { background: linear-gradient(160deg, var(--bg2), var(--felt-d)); border: 1px solid var(--line);
-  border-radius: 18px; padding: 28px 20px; cursor: pointer; color: var(--ink); text-align: center;
+  border-radius: 18px; padding: 28px 20px; color: var(--ink); text-align: center;
   transition: transform .18s, box-shadow .18s, border-color .18s; font-family: inherit; }
 .game-card:hover { transform: translateY(-6px); border-color: var(--gold); box-shadow: 0 12px 30px rgba(0,0,0,.45), 0 0 0 1px var(--gold) inset; }
 .gc-icon { font-size: 56px; line-height: 1; margin-bottom: 14px; }
