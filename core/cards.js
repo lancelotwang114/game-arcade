@@ -71,4 +71,4 @@ Platform.cards = {
     return `width:${w}px;height:${h}px;background:url('${this.BACK}') center/contain no-repeat;`;
   },
 };
-Platform.cards.setStyle(Platform.store.get('arcade_cardstyle', 'D'));
+Platform.cards.setStyle(Platform.store.get('arcade_cardstyle', 'F'));
