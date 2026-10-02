@@ -307,7 +307,7 @@ if (typeof Platform !== 'undefined') {
       if (seat == null || !this.st || this.st.turn !== seat || this.st.phase !== 'play') return;
       if (d.kind === 'challenge') { if (this.st.lastPlay && this.st.lastPlay.by !== seat) this.challenge(seat); return; }
       if (d.kind === 'play') {
-        const idx = (d.cards || []).filter(i => i >= 0 && i < this.st.players[seat].hand.length);
+        const idx = [...new Set(Array.isArray(d.cards) ? d.cards : [])].filter(i => Number.isInteger(i) && i >= 0 && i < this.st.players[seat].hand.length); // 去重+整數，防重複 index 作弊/非整數卡死
         if (idx.length < 1 || idx.length > 3) return;
         this.play(seat, idx.map(i => this.st.players[seat].hand[i]));
       }
@@ -316,7 +316,7 @@ if (typeof Platform !== 'undefined') {
   LiarsBar._setupGuestNet = function () {
     Platform.net.on('welcome', d => { this.O.mySeat = d.seat; this._renderRoom(); });
     Platform.net.on('lobby', d => { this.O.names = d.names; this._renderRoom(); });
-    Platform.net.on('start', d => { if (d && d.seat != null) this.O.mySeat = d.seat; this.O.started = true; });
+    Platform.net.on('start', d => { if (d && d.seat != null) this.O.mySeat = d.seat; this.O.started = true; if (this._overModal) { this._overModal.close(); this._overModal = null; } });
     Platform.net.on('state', d => {
       this.st = d.st; this.O.mySeat = d.seat; this.O.started = true;
       if (this.st.phase !== 'over') this._overShown = false;
@@ -324,6 +324,7 @@ if (typeof Platform !== 'undefined') {
       if (this.st.phase === 'over') this._maybeOver();
     });
     Platform.net.on('full', () => { Platform.toast('房間已滿或已開始'); Platform.exit(); });
+    Platform.net.on('_close', () => { if (!this._root) return; Platform.toast('房主已離線'); Platform.exit(); }); // 賓客只連房主
   };
 
   LiarsBar._startOnline = function (opts) {
@@ -345,7 +346,7 @@ if (typeof Platform !== 'undefined') {
     const s = this.st, winner = s.players.find(p => p.alive);
     const meWin = winner && winner.id === this.O.mySeat;
     Platform.audio && (meWin ? Platform.audio.win() : Platform.audio.lose());
-    Platform.ui.modal({
+    this._overModal = Platform.ui.modal({
       title: meWin ? '🏆 你贏了！' : '☠️ 遊戲結束',
       html: `最後生還者：<b>${winner ? winner.name : '無'}</b>`,
       buttons: [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.exit(); } }],
@@ -457,6 +458,7 @@ if (typeof Platform !== 'undefined') {
     chBtn.disabled = !canChallenge;
     if (!me.alive) hint.textContent = '';
     else if (!myTurn) hint.textContent = s.phase === 'reveal' ? '攤牌了…' : '等別人先出手…';
+    else if (!me.hand.length) hint.textContent = '沒牌了，只能喊騙子';
     else hint.textContent = `選 1–3 張，宣稱都是 ${this.face(s.tableRank)}；不信就喊騙子`;
 
     const doPlay = (cards) => { if (isHost) this.play(meSeat, cards); else Platform.net.sendHost('act', { kind: 'play', cards: cards.map(c => me.hand.indexOf(c)) }); };

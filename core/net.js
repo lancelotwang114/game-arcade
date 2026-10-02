@@ -36,7 +36,7 @@ Platform.net = {
   },
 
   _setupConn(c) {
-    c.on('open', () => { if (!this.conns.includes(c)) this.conns.push(c); this._emit('_open', { name: c.metadata && c.metadata.name }, c.peer); });
+    c.on('open', () => { if (!this.conns.includes(c)) this.conns.push(c); this._emit('_open', { name: String((c.metadata && c.metadata.name) || '').replace(/[<>&"'`]/g, '').slice(0, 16) }, c.peer); }); // 賓客名稱會進 innerHTML，入口濾掉 HTML 字元防 XSS
     c.on('data', d => { if (d && d.type) this._emit(d.type, d, c.peer); });
     c.on('close', () => { this.conns = this.conns.filter(x => x !== c); this._emit('_close', {}, c.peer); });
     c.on('error', e => console.error('conn error', e));

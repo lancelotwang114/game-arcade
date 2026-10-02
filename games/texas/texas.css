@@ -124,7 +124,7 @@
   background: rgba(255,255,255,.06); color: var(--brass-2); border: 1px solid rgba(216,177,90,.3); border-radius: 8px; padding: 6px 10px; min-height: 44px; }
 .tx-presets button:hover { background: rgba(216,177,90,.18); }
 .tx-sliderow { display: flex; align-items: center; gap: 10px; }
-.tx-sliderow input[type=range] { width: 200px; accent-color: var(--brass); }
+.tx-sliderow input[type=range] { width: 200px; accent-color: var(--brass); height: 44px; }
 #tx-rval { font-family: var(--o); font-weight: 600; font-size: 17px; color: var(--brass-2); min-width: 52px; text-align: right; }
 .tx-raisebtns { display: flex; gap: 8px; }
 .tx-raisebtns .tx-act { flex: 1; padding: 9px 14px; font-size: 14px; }
