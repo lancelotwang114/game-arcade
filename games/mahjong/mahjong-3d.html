@@ -486,6 +486,10 @@ body::before {
 #hud-pp3 { left:120px;  top:429px;  transform: translate(-50%, -50%); }   /* 左家左中央 */
 .pp.west .av { width:32px; height:32px; font-size:18px; }
 
+/* 嵌在牌桌遊戲廳（iframe）時：避開平台左上「← 回大廳」按鈕（12~107px） */
+html.in-arcade #lobby .lcard { padding-top: 72px; }
+html.in-arcade .pause-fab { left: 340px; }
+
 /* ── 左上獨立暫停浮動按鈕 ── */
 .pause-fab {
   position:absolute; left:200px; top:14px; z-index:50;
@@ -10734,8 +10738,9 @@ async function init() {
   // 房主誤關視窗：有連線房主存檔 → 顯示「繼續上局」以恢復房間（單機存檔維持原行為不顯示）
   try { if (Game.loadSave()?.net) document.getElementById('resume-bar').style.display='block'; } catch(e) {}
 
-  // 平台大廳「連線」進場 ?online=1 → 直接開連線對戰畫面
+  // 平台大廳「連線」進場 ?online=1 → 直接開連線對戰畫面；嵌在大廳 iframe 內時加 in-arcade（避開平台「← 回大廳」鈕）
   try {
+    if (window.self !== window.top) document.documentElement.classList.add('in-arcade');
     if (new URLSearchParams(location.search).get('online') === '1') Lobby.showOnline();
   } catch (e) {}
   // 邀請連結 ?room&host → 自動切到「加入」畫面並帶入連結（模組為 deferred，DOM 已就緒）

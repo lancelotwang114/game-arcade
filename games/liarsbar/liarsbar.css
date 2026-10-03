@@ -18,7 +18,7 @@
 .lb-lamp::after { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
   width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff2cf, #e8a23c);
   box-shadow: 0 0 26px 8px rgba(243,195,114,.7); }
-.lb-sign { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); z-index: 4;
+.lb-sign { position: absolute; top: 20px; left: 124px; z-index: 4; /* 放在「← 回大廳」右側，避開正上方座位 */
   font-family: 'Rye', serif; font-size: 22px; letter-spacing: .14em; color: var(--amber-2);
   text-shadow: 0 1px 0 #000, 0 0 18px rgba(232,162,60,.5); opacity: .9; }
 
@@ -125,6 +125,7 @@
   .lb-table::before { width: 94vw; height: 50vh; }
   .lb-seat { width: 102px; padding: 6px; }
   .lb-log { display: none; }
+  .lb-sign { display: none; } /* 窄螢幕放不下，裝飾性招牌省略 */
   .lb-center { width: 86vw; }
   .lb-tablecard { zoom: 1; }
   .lb-self { bottom: 8px; padding: 8px 12px; }
