@@ -94,7 +94,6 @@
 .lb-gunrest { position: absolute; z-index: 2; left: 71%; top: 72%; width: 170px; translate: -50% -50%; rotate: -24deg; pointer-events: none; }
 .lb-gunrest svg { width: 100%; height: auto; filter: drop-shadow(0 10px 10px rgba(0,0,0,.6)); }
 .lb-log { position: absolute; z-index: 8; left: 16px; top: 4px; max-width: 230px; font-size: 13px; color: var(--muted); line-height: 1.6; pointer-events: none; }
-.lb-fly { position: fixed; left: 0; top: 0; z-index: 35; pointer-events: none; }
 
 /* 你的區 */
 .lb-dock { position: relative; z-index: 10; display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: end; padding: 0 18px calc(14px + env(safe-area-inset-bottom)); }

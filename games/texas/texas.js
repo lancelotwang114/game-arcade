@@ -492,34 +492,14 @@ if (typeof Platform !== 'undefined') {
   const ini = nm => { const ch = [...(nm || '?')]; const last = ch[ch.length - 1]; return /[一-鿿]/.test(last) ? last : ch[0].toUpperCase(); };
   const actText = l => l.replace(/^跟 /, '跟注 ').replace(/^加到 /, '加注到 ');
   const actKind = l => /^(蓋牌|出局)/.test(l) ? 'k-fold' : /^全下/.test(l) ? 'k-allin' : /^(跟|加)/.test(l) ? 'k-bet' : '';
-  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  // ---------- 音效：Kenney Casino Audio（CC0 實錄，WAV 以支援 iPhone/Android）----------
-  Texas.sfx = {
-    buf: {}, _ld: null,
-    FILES: ['card-shuffle', 'card-slide-1', 'card-slide-2', 'card-slide-3', 'card-slide-4', 'card-place-1', 'card-place-2', 'card-place-3', 'card-place-4',
-      'card-shove-1', 'card-shove-2', 'chip-lay-1', 'chip-lay-2', 'chip-lay-3', 'chips-stack-1', 'chips-stack-2', 'chips-stack-3', 'chips-stack-4',
-      'chips-collide-1', 'chips-collide-2', 'chips-collide-3', 'chips-handle-1', 'chips-handle-2', 'chips-handle-3'],
-    ac() { return Platform.audio && Platform.audio._ac(); },
-    load() {
-      if (this._ld) return this._ld; const ac = this.ac(); if (!ac) return Promise.resolve();
-      // decodeAudioData 用回呼寫法：舊版 iOS Safari 不支援 Promise 版
-      return this._ld = Promise.all(this.FILES.map(n => fetch(`games/texas/audio/${n}.wav`).then(r => r.arrayBuffer())
-        .then(a => new Promise((ok, no) => ac.decodeAudioData(a, ok, no))).then(b => { this.buf[n] = b; }).catch(() => {})));
-    },
-    // iOS/Android：須在使用者手勢內恢復 AudioContext，並播一段靜音才算解鎖
-    unlock() { const ac = this.ac(); if (!ac) return; try { const s = ac.createBufferSource(); s.buffer = ac.createBuffer(1, 1, 22050); s.connect(ac.destination); s.start(0); } catch (e) {} },
-    // 同類音檔隨機挑一個 + 微調音高，避免重複感
-    play(name, { gain = .8, when = 0 } = {}) {
-      if (!Platform.audio.enabled) return; const ac = this.ac(); if (!ac) return;
-      const pool = this.FILES.filter(k => (k === name || k.startsWith(name + '-')) && this.buf[k]); if (!pool.length) return;
-      const s = ac.createBufferSource(), g = ac.createGain();
-      s.buffer = this.buf[pool[Math.random() * pool.length | 0]]; s.playbackRate.value = .95 + Math.random() * .1;
-      g.gain.value = gain * Platform.audio.vol; s.connect(g).connect(ac.destination); s.start(ac.currentTime + when);
-    },
+  // ---------- 音效：Kenney Casino Audio（CC0 實錄，WAV 以支援 iPhone/Android）；播放器在 core/fx.js ----------
+  const TX_SND = ['card-shuffle', 'card-slide-1', 'card-slide-2', 'card-slide-3', 'card-slide-4', 'card-place-1', 'card-place-2', 'card-place-3', 'card-place-4',
+    'card-shove-1', 'card-shove-2', 'chip-lay-1', 'chip-lay-2', 'chip-lay-3', 'chips-stack-1', 'chips-stack-2', 'chips-stack-3', 'chips-stack-4',
+    'chips-collide-1', 'chips-collide-2', 'chips-collide-3', 'chips-handle-1', 'chips-handle-2', 'chips-handle-3'];
+  Texas.sfx = Object.assign(Platform.fx.sampler('games/texas/audio/', Object.fromEntries(TX_SND.map(n => [n, n + '.wav']))), {
     // 過牌敲桌兩下：音效包無此聲，以低頻雜訊合成
     knock() {
-      if (!Platform.audio.enabled) return; const ac = this.ac(); if (!ac) return;
+      if (!Platform.audio.enabled) return; const ac = Platform.audio._ac(); if (!ac) return;
       [0, .14].forEach(d => {
         const n = Math.floor(ac.sampleRate * .08), b = ac.createBuffer(1, n, ac.sampleRate), x = b.getChannelData(0);
         for (let i = 0; i < n; i++) x[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
@@ -529,33 +509,13 @@ if (typeof Platform !== 'undefined') {
       });
     },
     ding() { Platform.audio._tone(880, .3, 'sine', .14); Platform.audio._tone(1320, .35, 'sine', .1, .09); },
-  };
+  });
 
-  // ---------- 動畫小工具 ----------
-  Texas._fx = function (fn, ms) { this._fxT.push(setTimeout(fn, reduced() ? 0 : ms)); }; // 減少動態：裝飾時間軸一律立即
-  Texas._clearFx = function () { (this._fxT || []).forEach(clearTimeout); this._fxT = []; if (this._root) this._root.querySelectorAll('.tx-fly').forEach(e => e.remove()); };
-  // 從 from 飛到 to 的裝飾元素（籌碼/牌背）
-  Texas._fly = function (from, to, html, dur, delay = 0) {
-    if (!from || !to || reduced()) return;
-    const a = from.getBoundingClientRect(), b = to.getBoundingClientRect(); if (!a.width || !b.width) return;
-    const w = document.createElement('div'); w.className = 'tx-fly'; w.innerHTML = html; this._root.appendChild(w);
-    const at = r => `translate(${r.left + r.width / 2}px,${r.top + r.height / 2}px) translate(-50%,-50%)`;
-    w.animate([{ transform: at(a) }, { transform: at(b) }], { duration: dur, delay, easing: 'cubic-bezier(.3,.7,.25,1)', fill: 'both' });
-    this._fx(() => w.remove(), dur + delay + 40);
-  };
-  // 數字滾動；新目標會讓舊的滾動自動停止
-  Texas._count = function (el, to, dur, delay = 0) {
-    el.dataset.v = to;
-    const run = () => {
-      if (+el.dataset.v !== to) return;
-      if (reduced()) { el.textContent = to; return; }
-      const from = +el.textContent || 0, t0 = performance.now();
-      const tick = () => { if (+el.dataset.v !== to) return; const k = Math.min(1, (performance.now() - t0) / dur);
-        el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3))); if (k < 1) this._fx(tick, 16); };
-      tick();
-    };
-    delay ? this._fx(run, delay) : run();
-  };
+  // ---------- 動畫小工具：時間軸在 core/fx.js（mount 時建立 this._tl）----------
+  Texas._fx = function (fn, ms) { this._tl.after(fn, ms); };
+  Texas._clearFx = function () { if (this._tl) this._tl.clear(); };
+  Texas._fly = function (from, to, html, dur, delay) { this._tl.fly(from, to, html, dur, delay); };
+  Texas._count = function (el, to, dur, delay) { this._tl.count(el, to, dur, delay); };
   Texas._pop = function (el, txt, kind) { el.textContent = txt; el.className = 'tx-bubble ' + kind; void el.offsetWidth; el.classList.add('pop'); };
   Texas._betFx = function (k, amt, label, delay = 0) {
     const U = this._ui, b = U.bet[k];
@@ -871,7 +831,7 @@ if (typeof Platform !== 'undefined') {
       const root = document.createElement('div');
       root.id = 'tx-root'; root.className = 'tx-root';
       stage.appendChild(root);
-      Texas._root = root; Texas._human = '你'; Texas._overShown = false; Texas._prev = null; Texas._fxT = [];
+      Texas._root = root; Texas._human = '你'; Texas._overShown = false; Texas._prev = null; Texas._tl = Platform.fx.timeline(root);
       // 進入遊戲的點擊就是使用者手勢：此時解鎖音效（iOS/Android 必要），並預載音檔
       Texas.sfx.unlock(); Texas.sfx.load();
       root.addEventListener('pointerdown', () => Texas.sfx.unlock(), { passive: true });

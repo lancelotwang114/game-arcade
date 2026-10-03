@@ -118,7 +118,6 @@
 @keyframes txFlip { 0% { scale: 1 1; } 50% { scale: 0 1; } 100% { scale: 1 1; } }
 @keyframes txHide { from { opacity: 1; } to { opacity: 0; } }
 .tx-mini.deal { animation: txAppear .01s var(--d, 0ms) both; }
-.tx-fly { position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none; }
 .tx-flycard { --w: 40px; }
 
 /* 組成牌型的牌：粗金框 + 上浮 + 呼吸光；其餘公共牌變暗 */

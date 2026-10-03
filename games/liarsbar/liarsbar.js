@@ -352,51 +352,23 @@ if (typeof Platform !== 'undefined') {
 
   // ================= 畫面層 v2（西部酒館）：骨架只建一次，依「前後狀態差異」觸發動畫與音效 =================
   // 動畫/音效純裝飾：DOM 最終狀態同步寫入，不依賴動畫結束回呼；唯一刻意延後的是開槍結果（輪盤轉完才揭曉）
-  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const ini = nm => { const ch = [...(nm || '?')]; const last = ch[ch.length - 1]; return /[一-鿿]/.test(last) ? last : ch[0].toUpperCase(); };
   const faceOf = r => r === 'JOKER' ? '★' : r;
   const cardHTML = (r, cls = '', st = '') => `<div class="lb-card ${r === 'JOKER' ? 'joker' : ''} ${cls}" style="${st}"><span>${faceOf(r)}</span><i class="lb-cback"></i></div>`;
   const backHTML = (cls = '', st = '') => `<div class="lb-card back ${cls}" style="${st}"></div>`;
   const ROULETTE_OUT = 4300; // 開輪盤 → 揭曉結果的時間（ms）
 
-  // ---------- 音效：全部為 CC0 實錄（來源見 games/liarsbar/audio/CREDITS.txt）----------
-  LiarsBar.sfx = {
-    buf: {}, _ld: null, amb: null,
-    FILES: { ambience: 'ambience.mp3', 'shot-1': 'shot-1.wav', 'shot-2': 'shot-2.wav', 'cock-1': 'cock-1.mp3', 'cock-2': 'cock-2.mp3', click: 'click.mp3',
-      'toast-1': 'toast-1.mp3', 'toast-2': 'toast-2.mp3', 'slam-1': 'slam-1.wav', 'slam-2': 'slam-2.wav', 'slam-3': 'slam-3.wav',
-      'glass-1': 'glass-1.wav', 'glass-2': 'glass-2.wav', 'glass-3': 'glass-3.wav', shuffle: 'card-shuffle.wav',
-      'slide-1': 'card-slide-1.wav', 'slide-2': 'card-slide-2.wav', 'slide-3': 'card-slide-3.wav',
-      'place-1': 'card-place-1.wav', 'place-2': 'card-place-2.wav', 'place-3': 'card-place-3.wav', shove: 'card-shove-1.wav' },
-    ac() { return Platform.audio && Platform.audio._ac(); },
-    load() {
-      if (this._ld) return this._ld; const ac = this.ac(); if (!ac) return Promise.resolve();
-      // decodeAudioData 用回呼寫法：舊版 iOS Safari 不支援 Promise 版
-      return this._ld = Promise.all(Object.entries(this.FILES).map(([k, f]) => fetch(`games/liarsbar/audio/${f}`).then(r => r.arrayBuffer())
-        .then(a => new Promise((ok, no) => ac.decodeAudioData(a, ok, no))).then(b => { this.buf[k] = b; }).catch(() => {})));
-    },
-    // iOS/Android：須在使用者手勢內恢復 AudioContext 並播一段靜音
-    unlock() { const ac = this.ac(); if (!ac) return; try { const s = ac.createBufferSource(); s.buffer = ac.createBuffer(1, 1, 22050); s.connect(ac.destination); s.start(0); } catch (e) {} },
-    play(name, { gain = .8, when = 0, rate = 1, jitter = true } = {}) {
-      if (!Platform.audio.enabled) return; const ac = this.ac(); if (!ac) return;
-      const keys = Object.keys(this.buf).filter(k => k === name || k.startsWith(name + '-')); if (!keys.length) return;
-      const s = ac.createBufferSource(), g = ac.createGain();
-      s.buffer = this.buf[keys[Math.random() * keys.length | 0]]; s.playbackRate.value = rate * (jitter ? .96 + Math.random() * .08 : 1);
-      g.gain.value = gain * Platform.audio.vol; s.connect(g).connect(ac.destination); s.start(ac.currentTime + when);
-    },
-    // 酒吧環境音（循環）；duck 讓開槍時壓低
-    ambience(on) {
-      const ac = this.ac(); if (!ac) return;
-      if (on && Platform.audio.enabled && !this.amb && this.buf.ambience) {
-        const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = this.buf.ambience; s.loop = true;
-        g.gain.setValueAtTime(0, ac.currentTime); g.gain.linearRampToValueAtTime(.32 * Platform.audio.vol, ac.currentTime + 2);
-        s.connect(g).connect(ac.destination); s.start(); this.amb = { s, g };
-      }
-      if (!on && this.amb) { const a = this.amb; this.amb = null; a.g.gain.linearRampToValueAtTime(0, ac.currentTime + .5); setTimeout(() => { try { a.s.stop(); } catch (e) {} }, 600); }
-    },
-    duck(level, sec) { if (!this.amb) return; const ac = this.ac(), t = ac.currentTime; this.amb.g.gain.cancelScheduledValues(t); this.amb.g.gain.linearRampToValueAtTime(level * Platform.audio.vol, t + sec); },
+  // ---------- 音效：全部為 CC0 實錄（來源見 games/liarsbar/audio/CREDITS.txt）；播放器在 core/fx.js ----------
+  LiarsBar.sfx = Object.assign(Platform.fx.sampler('games/liarsbar/audio/', {
+    ambience: 'ambience.mp3', 'shot-1': 'shot-1.wav', 'shot-2': 'shot-2.wav', 'cock-1': 'cock-1.mp3', 'cock-2': 'cock-2.mp3', click: 'click.mp3',
+    'toast-1': 'toast-1.mp3', 'toast-2': 'toast-2.mp3', 'slam-1': 'slam-1.wav', 'slam-2': 'slam-2.wav', 'slam-3': 'slam-3.wav',
+    'glass-1': 'glass-1.wav', 'glass-2': 'glass-2.wav', 'glass-3': 'glass-3.wav', shuffle: 'card-shuffle.wav',
+    'slide-1': 'card-slide-1.wav', 'slide-2': 'card-slide-2.wav', 'slide-3': 'card-slide-3.wav',
+    'place-1': 'card-place-1.wav', 'place-2': 'card-place-2.wav', 'place-3': 'card-place-3.wav', shove: 'card-shove-1.wav',
+  }), {
     // 轉輪盤：擊錘「喀」聲連續剪接，間隔由快到慢
     spin(dur = 2) { let t = 0, gap = .035; while (t < dur) { this.play('click', { when: t, gain: .35, rate: 1.7 }); t += gap; gap *= 1.09; } },
-  };
+  });
 
   // ---------- 左輪 SVG（側面）與彈巢正面 ----------
   const GUN_SVG = `<svg viewBox="0 0 260 130" aria-hidden="true">
@@ -425,18 +397,11 @@ if (typeof Platform !== 'undefined') {
       <g class="lb-rot"><circle r="58" fill="url(#lbcm)" stroke="#24272b" stroke-width="2"/>${fl}${ch}<circle r="9" fill="#2a2d31" stroke="#888"/></g></svg>`;
   };
 
-  // ---------- 小工具 ----------
-  LiarsBar._fx = function (fn, ms) { this._fxT.push(setTimeout(fn, reduced() ? 0 : ms)); };
-  LiarsBar._clearFx = function () { (this._fxT || []).forEach(clearTimeout); this._fxT = []; if (this._root) this._root.querySelectorAll('.lb-fly').forEach(e => e.remove()); };
-  LiarsBar._fly = function (from, to, html, dur, delay = 0) {
-    if (!from || !to || reduced()) return;
-    const a = from.getBoundingClientRect(), b = to.getBoundingClientRect(); if (!a.width || !b.width) return;
-    const w = document.createElement('div'); w.className = 'lb-fly'; w.innerHTML = html; this._root.appendChild(w);
-    const at = (r, rot) => `translate(${r.left + r.width / 2}px,${r.top + r.height / 2}px) translate(-50%,-50%) rotate(${rot}deg)`;
-    w.animate([{ transform: at(a, -8) }, { transform: at(b, Math.random() * 30 - 15) }], { duration: dur, delay, easing: 'cubic-bezier(.3,.7,.25,1)', fill: 'both' });
-    this._fx(() => w.remove(), dur + delay + 40);
-  };
-  const restart = (el, c) => { el.classList.remove(c); void el.offsetWidth; el.classList.add(c); };
+  // ---------- 小工具：時間軸在 core/fx.js（mount 時建立 this._tl）----------
+  LiarsBar._fx = function (fn, ms) { this._tl.after(fn, ms); };
+  LiarsBar._clearFx = function () { if (this._tl) this._tl.clear(); };
+  LiarsBar._fly = function (from, to, html, dur, delay) { this._tl.fly(from, to, html, dur, delay, [-8, Math.random() * 30 - 15]); };
+  const restart = (el, c) => Platform.fx.restart(el, c);
   LiarsBar._say = function (k, txt, cls = '') { const b = this._ui.bub[k]; b.textContent = txt; b.className = 'lb-bub ' + cls; restart(b, 'pop'); };
   LiarsBar._pileAdd = function (n, delay) {
     const pile = this._ui.pile;
@@ -684,7 +649,7 @@ if (typeof Platform !== 'undefined') {
       const root = document.createElement('div');
       root.id = 'lb-root'; root.className = 'lb-root';
       stage.appendChild(root);
-      LiarsBar._root = root; LiarsBar._human = '你'; LiarsBar._sel = new Set(); LiarsBar._overShown = false; LiarsBar._prev = null; LiarsBar._fxT = [];
+      LiarsBar._root = root; LiarsBar._human = '你'; LiarsBar._sel = new Set(); LiarsBar._overShown = false; LiarsBar._prev = null; LiarsBar._tl = Platform.fx.timeline(root);
       // 進場點擊即使用者手勢：解鎖音效（iOS/Android 必要）並預載；環境音載入後才開始
       LiarsBar.sfx.unlock(); LiarsBar.sfx.load().then(() => { if (LiarsBar._root && LiarsBar.st) LiarsBar.sfx.ambience(true); });
       root.addEventListener('pointerdown', () => LiarsBar.sfx.unlock(), { passive: true });
