@@ -54,6 +54,25 @@ const Texas = {
   },
   CAT_NAME: ['高牌', '一對', '兩對', '三條', '順子', '同花', '葫蘆', '四條', '同花順'],
 
+  // 最佳 5 張 + 組成牌型的關鍵牌（UI 金邊提示用）。cards 2~7 張 → {cat, tb, name, sub, key:[輸入索引]}
+  bestHand(cards) {
+    const n = cards.length, idx = [...Array(n).keys()];
+    let best = null, used = idx;
+    if (n > 5) {
+      const pick = (start, acc) => {
+        if (acc.length === 5) { const e = this.eval7(acc.map(i => cards[i])); if (!best || this.cmp(e, best) > 0) { best = e; used = acc; } return; }
+        for (let i = start; i < n; i++) pick(i + 1, [...acc, i]);
+      };
+      pick(0, []);
+    } else best = this.eval7(cards);
+    const { cat, tb } = best;
+    const keyRanks = { 0: [tb[0]], 1: [tb[0]], 2: [tb[0], tb[1]], 3: [tb[0]], 7: [tb[0]] }[cat]; // 其餘牌型 5 張全算
+    const key = keyRanks ? used.filter(i => keyRanks.includes(this.rv(cards[i].r))) : used;
+    const rn = v => ({ 14: 'A', 13: 'K', 12: 'Q', 11: 'J' }[v] || String(v));
+    const sub = [rn(tb[0]), rn(tb[0]), `${rn(tb[0])} 與 ${rn(tb[1])}`, rn(tb[0]), `到 ${rn(tb[0])}`, `${rn(tb[0])} 大`, `${rn(tb[0])} 帶 ${rn(tb[1])}`, rn(tb[0]), `到 ${rn(tb[0])}`][cat];
+    return { cat, tb, name: this.CAT_NAME[cat], sub, key };
+  },
+
   // ---------- 邊池（純函式） ----------
   // players: [{totalInvested, folded}] → [{amt, elig:[idx...]}]
   buildPots(players) {
@@ -109,7 +128,7 @@ const Texas = {
     s._seat = bbIdx; // 第一個行動者 = BB 之後
     s.log = [`— 第 ${s.handNo} 手 — 莊家：${s.players[s.dealer].name}`];
     if (this.render) this.render();
-    this.step();
+    this._after(2600, () => this.step()); // 等洗牌 + 發牌動畫
   },
   _postBlind(i, amt) { const p = this.st.players[i]; const a = Math.min(amt, p.chips); p.chips -= a; p.bet = a; p.totalInvested = a; if (p.chips === 0) p.allin = true; },
   _nextSeat(from, pred) { const p = this.st.players, n = p.length; for (let k = 1; k <= n; k++) { const i = (from + k) % n; if (pred(p[i])) return i; } return from; },
@@ -134,7 +153,7 @@ const Texas = {
     if (nxt === null) { this._nextStreet(); return; }
     s._seat = nxt; s.toAct = nxt;
     if (this.render) this.render();
-    if (s.players[nxt].isAI) this._after(900, () => this.aiAct(nxt));
+    if (s.players[nxt].isAI) this._after(1200 + Math.random() * 600, () => this.aiAct(nxt));
   },
 
   // 合法動作給人類 UI
@@ -169,7 +188,6 @@ const Texas = {
       if (inc >= s.lastRaise) { s.lastRaise = inc; s.players.forEach(q => { if (q !== p && !q.folded && !q.allin) q.acted = false; }); } // 足額加注才重開行動權
     }
     p.acted = true;
-    if (typeof Platform !== 'undefined' && Platform.audio) (type === 'fold' ? Platform.audio.click() : Platform.audio.chip());
     this.step();
   },
 
@@ -185,7 +203,7 @@ const Texas = {
     if (s.street === 'showdown') { this._showdown(); return; }
     this.log(`【${this._streetName(s.street)}】${s.board.map(c => c.r + ({ s: '♠', h: '♥', d: '♦', c: '♣' }[c.s] || c.s)).join(' ')}`);
     if (this.render) this.render();
-    this._after(600, () => this.step());
+    this._after(s.street === 'flop' ? 2000 : 1400, () => this.step()); // 等收籌碼 + 翻牌動畫
   },
   _streetName(st) { return { flop: '翻牌', turn: '轉牌', river: '河牌' }[st] || st; },
 
@@ -195,8 +213,7 @@ const Texas = {
     this.log(`${winner.name} 贏得底池 ${amt}（其他人蓋牌）`);
     this.st.street = 'idle'; this.st.toAct = -1;
     if (this.render) this.render();
-    if (typeof Platform !== 'undefined' && Platform.audio) Platform.audio.chip();
-    this._after(1500, () => this.newHand());
+    this._after(3600, () => this.newHand());
   },
 
   _showdown() {
@@ -222,8 +239,7 @@ const Texas = {
     s._reveal = true;
     results.forEach(r => this.log(`攤牌：${r.winners.join('、')} 以 ${r.cat} 贏得 ${r.amt}`));
     if (this.render) this.render();
-    if (typeof Platform !== 'undefined' && Platform.audio) { const win = results.some(r => r.winners.includes(s.players[0].name)); win ? Platform.audio.win() : Platform.audio.chip(); }
-    this._after(2600, () => { s._reveal = false; this.newHand(); });
+    this._after(6800, () => { s._reveal = false; this.newHand(); }); // 等亮牌 + 結算動畫
   },
 
   // ---------- AI ----------
@@ -346,14 +362,20 @@ if (typeof module !== 'undefined' && require.main === module) {
   T.st.players[2].folded = true; T._showdown();
   assert.deepStrictEqual(T.st.players.map(p => p.chips), [50, 51, 0], '零頭給莊家左手第一位');
   T._clearTimers();
+  // 關鍵牌（金邊）：手 8c 3s + 公牌 8h Ks 3d 2c 8s → 葫蘆 8 帶 3，關鍵牌 = 兩張手牌 + 公牌第 0/2/4 張
+  const bh = T.bestHand(C('8c 3s 8h Ks 3d 2c 8s'));
+  assert.strictEqual(bh.name, '葫蘆'); assert.strictEqual(bh.sub, '8 帶 3');
+  assert.deepStrictEqual(bh.key.sort((a, b) => a - b), [0, 1, 2, 4, 6], '葫蘆關鍵牌');
+  const bp = T.bestHand(C('8c 3s 8h Ks 3d'));
+  assert.strictEqual(bp.name, '兩對'); assert.deepStrictEqual(bp.key.sort((a, b) => a - b), [0, 1, 2, 4], '兩對不含 K');
+  assert.deepStrictEqual(T.bestHand(C('Ah 7d')).key, [0], '翻牌前高牌只標 A');
+  assert.strictEqual(T.bestHand(C('5s 4h 3d 2c As Kd Qd')).sub, '到 5', '輪子順子');
   console.log('✅ Texas 自測通過');
 }
 if (typeof module !== 'undefined') module.exports = Texas;
 
 // ---------- 平台註冊 + UI ----------
 if (typeof Platform !== 'undefined') {
-  const SEAT_CLASS = ['seat-b', 'seat-r', 'seat-t', 'seat-l'];
-
   // 對賓客遮蔽 hole cards（只給自己；攤牌時公開未蓋牌者）
   Texas._redact = function (seat) {
     const s = this.st, reveal = !!s._reveal;
@@ -458,105 +480,386 @@ if (typeof Platform !== 'undefined') {
     });
   };
 
+  // ================= 畫面層 v2：骨架只建一次，依「前後狀態差異」觸發動畫與音效 =================
+  // 動畫/音效純裝飾：DOM 最終狀態一律同步寫入，不依賴動畫結束回呼（背景分頁 rAF 停擺也不會卡住牌局）
+  const SR_ = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], SS_ = ['s', 'h', 'd', 'c'];
+  const BET_STREETS = ['preflop', 'flop', 'turn', 'river'];
+  const known = c => !!(c && c.r);
+  const cardName = c => ({ s: '黑桃', h: '紅心', d: '方塊', c: '梅花' }[c.s] || '') + c.r;
+  const cardHTML = (c, cls = '', st = '') => known(c)
+    ? `<div class="tx-card ${cls}" role="img" aria-label="${cardName(c)}" style="background-position:${SR_.indexOf(c.r) / 12 * 100}% ${SS_.indexOf(c.s) / 3 * 100}%;${st}"><i class="tx-back"></i></div>`
+    : `<div class="tx-card back ${cls}" role="img" aria-label="蓋著的牌" style="${st}"></div>`;
+  const ini = nm => { const ch = [...(nm || '?')]; const last = ch[ch.length - 1]; return /[一-鿿]/.test(last) ? last : ch[0].toUpperCase(); };
+  const actText = l => l.replace(/^跟 /, '跟注 ').replace(/^加到 /, '加注到 ');
+  const actKind = l => /^(蓋牌|出局)/.test(l) ? 'k-fold' : /^全下/.test(l) ? 'k-allin' : /^(跟|加)/.test(l) ? 'k-bet' : '';
+  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- 音效：Kenney Casino Audio（CC0 實錄，WAV 以支援 iPhone/Android）----------
+  Texas.sfx = {
+    buf: {}, _ld: null,
+    FILES: ['card-shuffle', 'card-slide-1', 'card-slide-2', 'card-slide-3', 'card-slide-4', 'card-place-1', 'card-place-2', 'card-place-3', 'card-place-4',
+      'card-shove-1', 'card-shove-2', 'chip-lay-1', 'chip-lay-2', 'chip-lay-3', 'chips-stack-1', 'chips-stack-2', 'chips-stack-3', 'chips-stack-4',
+      'chips-collide-1', 'chips-collide-2', 'chips-collide-3', 'chips-handle-1', 'chips-handle-2', 'chips-handle-3'],
+    ac() { return Platform.audio && Platform.audio._ac(); },
+    load() {
+      if (this._ld) return this._ld; const ac = this.ac(); if (!ac) return Promise.resolve();
+      // decodeAudioData 用回呼寫法：舊版 iOS Safari 不支援 Promise 版
+      return this._ld = Promise.all(this.FILES.map(n => fetch(`games/texas/audio/${n}.wav`).then(r => r.arrayBuffer())
+        .then(a => new Promise((ok, no) => ac.decodeAudioData(a, ok, no))).then(b => { this.buf[n] = b; }).catch(() => {})));
+    },
+    // iOS/Android：須在使用者手勢內恢復 AudioContext，並播一段靜音才算解鎖
+    unlock() { const ac = this.ac(); if (!ac) return; try { const s = ac.createBufferSource(); s.buffer = ac.createBuffer(1, 1, 22050); s.connect(ac.destination); s.start(0); } catch (e) {} },
+    // 同類音檔隨機挑一個 + 微調音高，避免重複感
+    play(name, { gain = .8, when = 0 } = {}) {
+      if (!Platform.audio.enabled) return; const ac = this.ac(); if (!ac) return;
+      const pool = this.FILES.filter(k => (k === name || k.startsWith(name + '-')) && this.buf[k]); if (!pool.length) return;
+      const s = ac.createBufferSource(), g = ac.createGain();
+      s.buffer = this.buf[pool[Math.random() * pool.length | 0]]; s.playbackRate.value = .95 + Math.random() * .1;
+      g.gain.value = gain * Platform.audio.vol; s.connect(g).connect(ac.destination); s.start(ac.currentTime + when);
+    },
+    // 過牌敲桌兩下：音效包無此聲，以低頻雜訊合成
+    knock() {
+      if (!Platform.audio.enabled) return; const ac = this.ac(); if (!ac) return;
+      [0, .14].forEach(d => {
+        const n = Math.floor(ac.sampleRate * .08), b = ac.createBuffer(1, n, ac.sampleRate), x = b.getChannelData(0);
+        for (let i = 0; i < n; i++) x[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+        const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+        s.buffer = b; f.type = 'lowpass'; f.frequency.value = 260; g.gain.value = 2.2 * Platform.audio.vol;
+        s.connect(f).connect(g).connect(ac.destination); s.start(ac.currentTime + d);
+      });
+    },
+    ding() { Platform.audio._tone(880, .3, 'sine', .14); Platform.audio._tone(1320, .35, 'sine', .1, .09); },
+  };
+
+  // ---------- 動畫小工具 ----------
+  Texas._fx = function (fn, ms) { this._fxT.push(setTimeout(fn, reduced() ? 0 : ms)); }; // 減少動態：裝飾時間軸一律立即
+  Texas._clearFx = function () { (this._fxT || []).forEach(clearTimeout); this._fxT = []; if (this._root) this._root.querySelectorAll('.tx-fly').forEach(e => e.remove()); };
+  // 從 from 飛到 to 的裝飾元素（籌碼/牌背）
+  Texas._fly = function (from, to, html, dur, delay = 0) {
+    if (!from || !to || reduced()) return;
+    const a = from.getBoundingClientRect(), b = to.getBoundingClientRect(); if (!a.width || !b.width) return;
+    const w = document.createElement('div'); w.className = 'tx-fly'; w.innerHTML = html; this._root.appendChild(w);
+    const at = r => `translate(${r.left + r.width / 2}px,${r.top + r.height / 2}px) translate(-50%,-50%)`;
+    w.animate([{ transform: at(a) }, { transform: at(b) }], { duration: dur, delay, easing: 'cubic-bezier(.3,.7,.25,1)', fill: 'both' });
+    this._fx(() => w.remove(), dur + delay + 40);
+  };
+  // 數字滾動；新目標會讓舊的滾動自動停止
+  Texas._count = function (el, to, dur, delay = 0) {
+    el.dataset.v = to;
+    const run = () => {
+      if (+el.dataset.v !== to) return;
+      if (reduced()) { el.textContent = to; return; }
+      const from = +el.textContent || 0, t0 = performance.now();
+      const tick = () => { if (+el.dataset.v !== to) return; const k = Math.min(1, (performance.now() - t0) / dur);
+        el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3))); if (k < 1) this._fx(tick, 16); };
+      tick();
+    };
+    delay ? this._fx(run, delay) : run();
+  };
+  Texas._pop = function (el, txt, kind) { el.textContent = txt; el.className = 'tx-bubble ' + kind; void el.offsetWidth; el.classList.add('pop'); };
+  Texas._betFx = function (k, amt, label, delay = 0) {
+    const U = this._ui, b = U.bet[k];
+    this._fly(U.ava[k], b, '<span class="tx-chip"></span>', 500, delay);
+    b.querySelector('b').textContent = amt; b.style.setProperty('--d', delay + 450 + 'ms');
+    b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
+    this.sfx.play(amt > 40 ? 'chips-stack' : 'chip-lay', { when: delay / 1000 });
+    if (amt >= 200) this.sfx.play('chips-handle', { when: delay / 1000 + .1, gain: .5 });
+    if (label) this._pop(U.bub[k], `${label} ${amt}`, 'k-bet');
+  };
+  // 牌面風格以 CSS 變數套用，切換時不必重建牌。須轉絕對網址：var() 裡的 url() 會相對於 texas.css 解析
+  Texas._skin = function () {
+    const r = this._root.style, abs = u => new URL(u, document.baseURI).href;
+    r.setProperty('--tx-sheet', `url('${abs(Platform.cards.SHEET)}')`); r.setProperty('--tx-back', `url('${abs(Platform.cards.BACK)}')`);
+  };
+
+  // ---------- 骨架 ----------
+  Texas._build = function () {
+    const root = this._root;
+    const seat = p => `<div class="tx-seat" data-p="${p}"><div class="tx-pod"><div class="tx-ava"><span class="tx-ini"></span><span class="tx-dbtn" hidden>D</span></div>
+      <div><div class="tx-nm"></div><div class="tx-st"></div></div><div class="tx-hole"></div></div><span class="tx-bubble"></span></div>`;
+    root.innerHTML = `<div class="tx-app">
+      <header class="tx-top">
+        <div class="tx-info">第 <b class="tx-hno">1</b> 手<span class="tx-blinds"> · 盲注 <b>${this.SB}/${this.BB}</b></span></div>
+        <button class="tx-ibtn tx-snd" aria-label="音效開關"></button>
+        <button class="tx-ibtn tx-style" aria-label="牌面風格">🎴<span class="tx-lbl"> 牌面</span></button>
+        <button class="tx-ibtn tx-logbtn" aria-label="牌局紀錄">☰</button>
+      </header>
+      <main class="tx-wrap"><div class="tx-table">
+        ${seat(1)}${seat(2)}${seat(3)}
+        ${[0, 1, 2, 3].map(p => `<div class="tx-bet" data-p="${p}"><span class="tx-chip"></span><b></b></div>`).join('')}
+        <div class="tx-deck"></div>
+        <div class="tx-center">
+          <div class="tx-phase"></div>
+          <div class="tx-board">${'<div class="tx-slot"></div>'.repeat(5)}</div>
+          <div class="tx-pot"><span class="tx-chip gold"></span><b>0</b><small>底池</small></div>
+        </div>
+        <div class="tx-banner" aria-live="polite"><span></span><small></small></div>
+      </div></main>
+      <section class="tx-dock" aria-label="你的手牌與行動">
+        <div class="tx-me"><div class="tx-ava"><span class="tx-ini"></span><span class="tx-dbtn" hidden>D</span></div>
+          <div><div class="tx-nm"></div><div class="tx-st"></div><div class="tx-str"></div></div><span class="tx-bubble"></span></div>
+        <div class="tx-held" title="按住偷看手牌"></div>
+        <div class="tx-ctrl">
+          <div class="tx-wait" aria-live="polite"></div>
+          <div class="tx-raise" role="dialog" aria-label="選擇加注金額">
+            <div class="tx-rttl"><span class="tx-rlbl">加注到</span><b class="tx-rval">0</b></div>
+            <div class="tx-presets"></div>
+            <div class="tx-srow"><button class="tx-btn ghost tx-rminus" aria-label="減少">−</button><input type="range" class="tx-rng" aria-label="加注金額">
+              <button class="tx-btn ghost tx-rplus" aria-label="增加">＋</button><button class="tx-btn primary tx-rok">確認</button></div>
+          </div>
+          <div class="tx-acts"><button class="tx-btn fold tx-fold" disabled>蓋牌</button><button class="tx-btn primary tx-call" disabled>跟注</button><button class="tx-btn tx-raisebtn" disabled aria-expanded="false">加注</button></div>
+        </div>
+      </section>
+      <aside class="tx-log" aria-label="牌局紀錄"><h2>牌局紀錄 <button class="tx-ibtn tx-logx" aria-label="關閉">✕</button></h2><ul></ul></aside>
+    </div>`;
+    const q = s => root.querySelector(s);
+    const U = this._ui = {
+      app: q('.tx-app'), hno: q('.tx-hno'), phase: q('.tx-phase'), slots: [...root.querySelectorAll('.tx-slot')], board: q('.tx-board'),
+      pot: q('.tx-pot'), potv: q('.tx-pot b'), deck: q('.tx-deck'), banner: q('.tx-banner'),
+      seat: [q('.tx-me'), ...[1, 2, 3].map(p => q(`.tx-seat[data-p="${p}"]`))],
+      bet: [0, 1, 2, 3].map(p => q(`.tx-bet[data-p="${p}"]`)),
+      held: q('.tx-held'), str: q('.tx-str'), wait: q('.tx-wait'),
+      raise: q('.tx-raise'), presets: q('.tx-presets'), rng: q('.tx-rng'), rval: q('.tx-rval'), rlbl: q('.tx-rlbl'), rok: q('.tx-rok'),
+      fold: q('.tx-fold'), call: q('.tx-call'), raiseBtn: q('.tx-raisebtn'), snd: q('.tx-snd'), log: q('.tx-log'), logList: q('.tx-log ul'),
+    };
+    U.ava = U.seat.map(e => e.querySelector('.tx-ava')); U.st = U.seat.map(e => e.querySelector('.tx-st'));
+    U.bub = U.seat.map(e => e.querySelector('.tx-bubble')); U.hole = U.seat.map(e => e.querySelector('.tx-hole')); // [0] 為 null（自己用 held）
+    this._prev = null; this._paid = null; this._R = null; this._strLabel = '';
+    const sndIcon = () => { const on = Platform.audio.enabled; U.snd.textContent = on ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(on)); };
+    sndIcon();
+    U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); };
+    q('.tx-logbtn').onclick = () => U.log.classList.add('open');
+    q('.tx-logx').onclick = () => U.log.classList.remove('open');
+    q('.tx-style').onclick = () => Platform.ui.modal({
+      title: '選擇牌面風格', html: '即時切換（會記住）',
+      buttons: Object.keys(Platform.cards.STYLE_NAMES).map(k => ({
+        label: Platform.cards.STYLE_NAMES[k] + (Platform.cards.style === k ? ' ✓' : ''), primary: Platform.cards.style === k,
+        onClick: c => { c(); Platform.cards.setStyle(k); this._skin(); },
+      })),
+    });
+    U.held.onpointerdown = () => U.held.classList.add('peek');
+    U.rng.oninput = () => this._setR(+U.rng.value);
+    q('.tx-rminus').onclick = () => this._setR(this._R.v - 10);
+    q('.tx-rplus').onclick = () => this._setR(this._R.v + 10);
+    this._skin();
+  };
+
+  // ---------- 加注面板 ----------
+  Texas._openRaise = function (L) {
+    const U = this._ui, s = this.st, base = this.pot() + L.toCall;
+    const clamp = v => Math.min(L.maxRaise, Math.max(L.minRaise, Math.round(v / 10) * 10));
+    const half = clamp(s.currentBet + base / 2), full = clamp(s.currentBet + base);  // 底池加注 = 現注 + (底池 + 跟注額)
+    this._R = { min: L.minRaise, max: L.maxRaise, v: half };
+    U.rlbl.textContent = s.currentBet > 0 ? '加注到' : '下注';
+    U.presets.innerHTML = [['最小', L.minRaise], ['½ 池', half], ['底池', full], ['全下', L.maxRaise]]
+      .map(([l, v]) => `<button class="${l === '全下' ? 'allin' : ''}" data-v="${v}">${l}<small>${v}</small></button>`).join('');
+    U.presets.querySelectorAll('button').forEach(b => b.onclick = () => this._setR(+b.dataset.v));
+    U.rng.min = L.minRaise; U.rng.max = L.maxRaise; U.rng.step = 10;
+    this._setR(half);
+    U.raise.classList.add('open'); U.raiseBtn.setAttribute('aria-expanded', 'true');
+  };
+  Texas._closeRaise = function () { const U = this._ui; U.raise.classList.remove('open'); U.raiseBtn.setAttribute('aria-expanded', 'false'); };
+  Texas._setR = function (v) {
+    const R = this._R, U = this._ui; if (!R) return;
+    v = Math.max(R.min, Math.min(R.max, v)); R.v = v; U.rng.value = v; U.rval.textContent = v;
+    U.rok.textContent = v >= R.max ? '全下 ✓' : '確認 ✓';
+    U.presets.querySelectorAll('button').forEach(b => b.classList.toggle('sel', +b.dataset.v === v));
+  };
+
+  // ---------- 主渲染 ----------
   Texas.render = function () {
     const root = this._root; if (!root) return;
     const O = this.O;
     if (O && !O.started) { this._renderRoom(); return; }
     const s = this.st; if (!s) return;
-    const showdown = s._reveal;
-    const meSeat = O ? O.mySeat : 0;
-    const N = s.players.length;
-    const isHost = !O || O.isHost;
-    const winners = s._winners || [];
-    let prevBoard = this._prevBoard || 0; if (s.board.length < prevBoard) prevBoard = 0;
-    const newHand = this._prevHand !== s.handNo; this._prevHand = s.handNo; // 新一手→發牌動畫
-    const chip = (amt, cls) => `<span class="tx-chip ${cls || ''}"><span class="tx-chip-d"></span><b>${amt}</b></span>`;
-    const cardName = c => ({ s: '黑桃', h: '紅心', d: '方塊', c: '梅花' }[c.s] || '') + c.r;
-    const face = (c, extra = '') => `<div class="tx-cardimg ${extra}" role="img" aria-label="${cardName(c)}" style="${Platform.cards.spriteCSS(c, 46)}"></div>`;
-    const backc = `<div class="tx-cardimg" role="img" aria-label="蓋著的牌" style="${Platform.cards.backCSS(46)}"></div>`;
+    if (!root.querySelector('.tx-app')) this._build();
+    const U = this._ui, me = O ? O.mySeat : 0, pl = s.players, N = pl.length, isHost = !O || O.isHost;
+    const pos = i => (i - me + N) % N; // 0 = 自己（下方），1 右、2 上、3 左
+    const P = this._prev, newHand = !P || P.hand !== s.handNo;
+    const mine = pl[me];
+    let t = 0, payT = 0; // 本次更新的動畫時間軸（ms）
 
-    const seatHtml = s.players.map((p, i) => {
-      const reveal = i === meSeat || (showdown && !p.folded);
-      const cards = p.hole.map((c, ci) => {
-        if (!(reveal && c && c.r)) return backc;
-        const ex = (i === meSeat && newHand) ? 'tx-deal' : (showdown && i !== meSeat ? 'tx-flip' : '');
-        return face(c, ex + (ex ? ` d${ci}` : ''));
-      }).join('');
-      const pos = (i - meSeat + N) % N; // 自己永遠在下方
-      const cls = [SEAT_CLASS[pos], p.folded ? 'folded' : '', s.toAct === i ? 'active' : '', winners.includes(i) ? 'winner' : ''].join(' ');
-      const badge = p.allin ? '<div class="tx-badge allin">全下</div>' : (p.last ? `<div class="tx-badge">${p.last}</div>` : '');
-      return `<div class="tx-seat ${cls}">
-        ${s.dealer === i ? '<span class="tx-dealer">D</span>' : ''}
-        <div class="tx-pinfo"><span class="tx-name">${p.name}</span><span class="tx-stack">${p.chips}</span></div>
-        <div class="tx-cards">${cards}</div>
-        ${badge}
-        ${p.bet > 0 ? `<div class="tx-betchip">${chip(p.bet)}</div>` : ''}
-      </div>`;
-    }).join('');
-
-    const boardHtml = s.board.map((c, i) => `<div class="tx-cardimg ${i >= prevBoard ? 'deal-new' : ''}" role="img" aria-label="${cardName(c)}" style="${Platform.cards.spriteCSS(c, 66)}"></div>`).join('')
-      + Array(Math.max(0, 5 - s.board.length)).fill('<div class="board-slot"></div>').join('');
-    this._prevBoard = s.board.length;
-
-    const phase = ({ preflop: '翻牌前', flop: '翻牌', turn: '轉牌', river: '河牌', showdown: '攤牌', over: '結束' })[s.street] || '';
-
-    root.innerHTML = `
-      <div class="tx-felt">
-        <button class="tx-stylebtn" id="tx-style">🎴 牌面</button>
-        <div class="tx-rail"></div>
-        ${seatHtml}
-        <div class="tx-center">
-          <div class="tx-phase">${phase}<i>第 ${s.handNo} 手</i></div>
-          <div class="tx-board">${boardHtml}</div>
-          <div class="tx-pot">${chip(this.pot(), 'pot' + (showdown ? ' win' : ''))}</div>
-        </div>
-        <div class="tx-log">${s.log.map(l => `<div>${l}</div>`).join('')}</div>
-        <div class="tx-actions" id="tx-actions"></div>
-      </div>`;
-
-    const me = s.players[meSeat];
-    const bar = root.querySelector('#tx-actions');
-    const myTurn = s.toAct === meSeat && s.street !== 'idle' && s.street !== 'over' && me && !me.folded && !me.allin;
-    if (myTurn) {
-      const L = this.legal(meSeat);
-      const callLabel = L.toCall > 0 ? `跟注 <b>${L.toCall}</b>` : '過牌';
-      const send = (kind, amount) => { if (isHost) this.apply(meSeat, kind, amount); else Platform.net.sendHost('act', { kind, amount }); };
-      const pot = this.pot();
-      const clampR = v => Math.min(L.maxRaise, Math.max(L.minRaise, v));
-      const half = clampR(s.currentBet + Math.floor(pot * 0.5)), full = clampR(s.currentBet + pot);
-      bar.innerHTML = `
-        <button class="tx-act fold" id="tx-fold">蓋牌</button>
-        <button class="tx-act call" id="tx-call">${callLabel}</button>
-        ${L.raise ? `<div class="tx-raisebox">
-          <div class="tx-presets"><button data-v="${half}">½ 底池</button><button data-v="${full}">底池</button></div>
-          <div class="tx-sliderow"><input type="range" id="tx-rng" aria-label="加注金額" min="${L.minRaise}" max="${L.maxRaise}" value="${L.minRaise}" step="${this.BB}"><span id="tx-rval">${L.minRaise}</span></div>
-          <div class="tx-raisebtns"><button class="tx-act raise" id="tx-raise">加注</button><button class="tx-act allin" id="tx-allin">全下 ${L.maxRaise}</button></div>
-        </div>` : ''}`;
-      root.querySelector('#tx-fold').onclick = () => send('fold');
-      root.querySelector('#tx-call').onclick = () => send(L.toCall > 0 ? 'call' : 'check');
-      if (L.raise) {
-        const rng = root.querySelector('#tx-rng'), rval = root.querySelector('#tx-rval');
-        rng.oninput = () => rval.textContent = rng.value;
-        root.querySelectorAll('.tx-presets button').forEach(b => b.onclick = () => { rng.value = b.dataset.v; rval.textContent = b.dataset.v; });
-        root.querySelector('#tx-raise').onclick = () => send('raise', +rng.value);
-        root.querySelector('#tx-allin').onclick = () => send('allin');
-      }
-    } else {
-      const who = s.toAct >= 0 && s.players[s.toAct] ? s.players[s.toAct].name : '';
-      bar.innerHTML = `<div class="tx-wait">${s.street === 'over' ? '' : (who ? `輪到 ${who}…` : '')}</div>`;
-    }
-
-    const sb = root.querySelector('#tx-style');
-    if (sb) sb.onclick = () => Platform.ui.modal({
-      title: '選擇牌面風格',
-      html: '即時切換（會記住）',
-      buttons: Object.keys(Platform.cards.STYLE_NAMES).map(k => ({
-        label: Platform.cards.STYLE_NAMES[k] + (Platform.cards.style === k ? ' ✓' : ''),
-        primary: Platform.cards.style === k,
-        onClick: c => { c(); Platform.cards.setStyle(k); this.render(); },
-      })),
+    U.hno.textContent = s.handNo;
+    U.phase.textContent = ({ preflop: '翻 牌 前', flop: '翻 牌', turn: '轉 牌', river: '河 牌', showdown: '攤 牌', over: '結 束' })[s.street] || '';
+    pl.forEach((p, i) => {
+      const seat = U.seat[pos(i)];
+      seat.querySelector('.tx-ini').textContent = ini(p.name);
+      seat.querySelector('.tx-nm').textContent = p.name;
+      seat.querySelector('.tx-dbtn').hidden = s.dealer !== i;
+      seat.classList.toggle('folded', !!p.folded);
     });
 
+    if (newHand) {
+      // ---- 新一手：清桌 → 盲注 → 洗牌 → 逐張發牌（先牌背，到齊後自己的翻面）----
+      this._clearFx(); this._paid = null; this._strLabel = '';
+      U.slots.forEach(sl => { sl.innerHTML = ''; }); U.board.classList.remove('dim');
+      U.banner.className = 'tx-banner';
+      U.bet.forEach(b => b.classList.remove('on'));
+      U.bub.forEach(b => { b.className = 'tx-bubble'; });
+      U.hole.forEach(h => { if (h) { h.innerHTML = ''; h.classList.remove('show'); } });
+      U.held.innerHTML = ''; U.held.classList.remove('folded');
+      U.seat.forEach(e => e.classList.remove('winner'));
+      U.str.className = 'tx-str'; U.str.textContent = '';
+      U.potv.textContent = 0; U.potv.dataset.v = 0;
+      pl.forEach((p, i) => { const el = U.st[pos(i)]; el.textContent = p.chips + p.bet; el.dataset.v = p.chips + p.bet; });
+      pl.forEach((p, i) => {
+        if (p.bet > 0) this._betFx(pos(i), p.bet, p.bet < this.BB ? '小盲' : '大盲');
+        else if (p.last) this._pop(U.bub[pos(i)], p.last, actKind(p.last));
+      });
+      this.sfx.play('card-shuffle', { when: .3 });
+      const order = []; for (let k = 1; k <= N; k++) { const i = (s.dealer + k) % N; if (pl[i].hole.length) order.push(i); }
+      const dl = {}; let d = 1000;
+      order.forEach(i => { dl[i] = []; });
+      [0, 1].forEach(() => order.forEach(i => { dl[i].push(d); d += 150; }));
+      const flipT = d + 500;
+      order.forEach(i => {
+        const k = pos(i), box = k ? U.hole[k] : U.held;
+        box.innerHTML = k ? dl[i].map(x => `<i class="tx-mini deal" style="--d:${x + 350}ms"></i>`).join('')
+          : pl[i].hole.map((c, j) => cardHTML(c, 'deal', `--d:${dl[i][j] + 350}ms;--t:${flipT}ms`)).join('');
+        dl[i].forEach((x, j) => { this._fly(U.deck, box.children[j], '<div class="tx-card back tx-flycard"></div>', 350, x); this.sfx.play('card-slide', { gain: .6, when: x / 1000 }); });
+      });
+      t = flipT + 400;
+    } else {
+      // ---- 換街 / 結算：桌面下注掃進底池 ----
+      const sweep = pl.map((p, i) => i).filter(i => P.bet[i] > 0 && (pl[i].bet === 0 || s.street === 'idle'));
+      if (sweep.length) {
+        sweep.forEach((i, n) => { const b = U.bet[pos(i)]; this._fly(b, U.pot, '<span class="tx-chip"></span>', 550, n * 90); b.classList.remove('on'); });
+        this.sfx.play('chips-collide'); this.sfx.play('chips-collide', { when: .14, gain: .6 }); this.sfx.play('chips-handle', { when: .25, gain: .7 });
+        t = 650;
+      }
+      if (s.street !== P.street) U.bub.forEach(b => { if (!/k-fold|k-allin/.test(b.className)) b.className = 'tx-bubble'; });
+      // ---- 新公共牌：逐張落桌 ----
+      for (let k = P.boardLen; k < s.board.length; k++) {
+        const at = t + (k - P.boardLen) * 450;
+        U.slots[k].innerHTML = cardHTML(s.board[k], 'in', `--d:${at}ms`);
+        this.sfx.play('card-place', { when: at / 1000 });
+      }
+      if (s.board.length > P.boardLen) t += (s.board.length - P.boardLen) * 450 + 150;
+      // ---- 每位玩家的新動作：氣泡 + 音效 + 籌碼 ----
+      pl.forEach((p, i) => {
+        const k = pos(i);
+        if (p.bet > P.bet[i]) this._betFx(k, p.bet);
+        else if (p.chips < P.chips[i]) { // 跟注與換街在同一次更新：籌碼直接飛進底池
+          this._fly(U.ava[k], U.pot, '<span class="tx-chip"></span>', 600, 0); this.sfx.play(P.chips[i] - p.chips > 40 ? 'chips-stack' : 'chip-lay');
+        }
+        if (!p.last || !((p.acted && !P.acted[i]) || p.last !== P.last[i])) return;
+        this._pop(U.bub[k], actText(p.last), actKind(p.last));
+        if (p.last === '過牌') this.sfx.knock();
+        if (p.folded && !P.folded[i]) {
+          this.sfx.play('card-shove', { gain: .7 });
+          if (k) { [...U.hole[k].children].forEach((m, j) => this._fly(m, U.deck, '<i class="tx-mini"></i>', 450, j * 80)); U.hole[k].innerHTML = ''; }
+          else U.held.classList.add('folded');
+        }
+      });
+      // ---- 攤牌：對手逐一亮牌 ----
+      if (s._reveal && !P.reveal) {
+        let n = 0;
+        pl.forEach((p, i) => {
+          const k = pos(i); if (!k || p.folded || !known(p.hole[0])) return;
+          const at = t + n++ * 700;
+          U.hole[k].classList.add('show'); U.hole[k].innerHTML = p.hole.map(c => cardHTML(c, 'mini in', `--d:${at}ms`)).join('');
+          this.sfx.play('card-place', { when: at / 1000 });
+        });
+        t += n * 700 + 300;
+      }
+      // ---- 結算：橫幅 → 底池籌碼飛向贏家 ----
+      const done = s.street === 'idle' || (s.street === 'showdown' && (s._winners || []).length);
+      if (done && this._paid !== s.handNo) {
+        this._paid = s.handNo;
+        const win = s.street === 'idle' ? pl.map((p, i) => i).filter(i => !pl[i].folded) : s._winners;
+        const gain = i => pl[i].chips - (P.chips[i] - (pl[i].totalInvested - P.inv[i])); // 扣回同一次更新內才投入的跟注額
+        const iWin = win.includes(me), total = pl.reduce((a, p) => a + p.totalInvested, 0);
+        let head, sub;
+        if (s.street === 'idle') { head = iWin ? '你贏了' : `${pl[win[0]].name} 贏了`; sub = `其他人蓋牌 · 贏得 ${gain(win[0])}`; }
+        else {
+          const h = this.bestHand([...pl[win[0]].hole, ...s.board]);
+          head = iWin ? `${h.name}！` : `${win.map(i => pl[i].name).join('、')} 贏了`;
+          sub = iWin ? `你贏得 ${gain(me)}` : `${h.name} · 贏得 ${win.reduce((a, i) => a + gain(i), 0)}`;
+        }
+        this._count(U.potv, total, 400, Math.min(t, 600));
+        this._fx(() => { U.banner.firstChild.textContent = head; U.banner.lastChild.textContent = sub; U.banner.className = 'tx-banner'; void U.banner.offsetWidth; U.banner.classList.add('show'); }, t);
+        payT = t + 900;
+        win.forEach((i, w) => {
+          for (let c = 0; c < 6; c++) this._fly(U.pot, U.ava[pos(i)], '<span class="tx-chip gold"></span>', 750, payT + c * 140 + w * 60);
+          this._fx(() => U.seat[pos(i)].classList.add('winner'), payT);
+        });
+        for (let c = 0; c < 5; c++) this.sfx.play('chips-stack', { when: payT / 1000 + c * .15, gain: .7 });
+        this.sfx.play('chips-handle', { when: payT / 1000 + .4 });
+        if (iWin) this._fx(() => Platform.audio.win(), payT + 400);
+        this._count(U.potv, 0, 800, payT);
+      }
+    }
+
+    // ---- 同步層：不論動畫，最終狀態一律寫入 ----
+    if (this._paid !== s.handNo) {
+      const collected = pl.reduce((a, p) => a + p.totalInvested - (s.street === 'idle' ? 0 : p.bet), 0);
+      if (+U.potv.dataset.v !== collected) this._count(U.potv, collected, 500, t ? Math.min(t, 650) : 0);
+    }
+    pl.forEach((p, i) => {
+      const k = pos(i), el = U.st[k], b = U.bet[k];
+      if (newHand) this._count(el, p.chips, 400, 400);
+      else if (+el.dataset.v !== p.chips) this._count(el, p.chips, p.chips > +el.dataset.v ? 1000 : 400, p.chips > +el.dataset.v && payT ? payT : 100);
+      if (p.bet > 0 && s.street !== 'idle') { if (!b.classList.contains('on')) { b.querySelector('b').textContent = p.bet; b.style.setProperty('--d', '0ms'); b.classList.add('on'); } }
+      else b.classList.remove('on');
+      // 中途重建（例如連線開局）時補上手牌
+      if (k && !p.folded && p.hole.length && !U.hole[k].children.length && !s._reveal) U.hole[k].innerHTML = '<i class="tx-mini"></i><i class="tx-mini"></i>';
+    });
+    if (mine && known(mine.hole[0]) && !U.held.children.length) U.held.innerHTML = mine.hole.map(c => cardHTML(c)).join('');
+    U.held.classList.toggle('folded', !!(mine && mine.folded && mine.hole.length));
+
+    // ---- 你的牌型 + 金邊提示（等發牌/翻牌動畫結束才亮）----
+    if (mine && known(mine.hole[0])) {
+      const h = this.bestHand([...mine.hole, ...s.board]), key = h.cat && !mine.folded ? h.key : [], label = mine.folded ? '已蓋牌' : `${h.name} ${h.sub}`;
+      const apply = () => {
+        if (mine.folded) { U.str.className = 'tx-str'; U.str.textContent = '已蓋牌'; }
+        else {
+          U.str.innerHTML = ''; U.str.append(h.name + ' '); const em = document.createElement('em'); em.textContent = h.sub; U.str.append(em);
+          U.str.className = 'tx-str' + (h.cat ? ' made' : '');
+          if (label !== this._strLabel) { void U.str.offsetWidth; U.str.classList.add('up'); }
+        }
+        this._strLabel = label;
+        [...U.held.children].forEach((c, j) => c.classList.toggle('hit', key.includes(j)));
+        U.slots.forEach((sl, j) => { const c = sl.firstElementChild; if (c) c.classList.toggle('hit', key.includes(j + 2)); });
+        U.board.classList.toggle('dim', key.some(x => x >= 2));
+      };
+      t ? this._fx(apply, t) : apply();
+    }
+
+    // ---- 輪到誰 + 操作區 ----
+    const live = BET_STREETS.includes(s.street) && s.toAct >= 0 && !!pl[s.toAct];
+    if (!P || P.toAct !== s.toAct || newHand) {
+      U.seat.forEach(e => e.classList.remove('turn')); U.ava.forEach(a => a.classList.remove('turn'));
+      if (live) { void U.app.offsetWidth; U.seat[pos(s.toAct)].classList.add('turn'); U.ava[pos(s.toAct)].classList.add('turn'); }
+    }
+    const myTurn = live && s.toAct === me && mine && !mine.folded && !mine.allin;
+    U.app.classList.toggle('myturn', !!myTurn);
+    U.wait.textContent = myTurn ? '輪到你' : live ? `輪到 ${pl[s.toAct].name}…` : '';
+    if (myTurn && (!P || !P.myTurn || newHand)) {
+      const L = this.legal(me);
+      const send = (kind, amount) => {
+        this._closeRaise(); [U.fold, U.call, U.raiseBtn].forEach(b => { b.disabled = true; });
+        if (isHost) this.apply(me, kind, amount); else Platform.net.sendHost('act', { kind, amount });
+      };
+      U.call.innerHTML = L.toCall > 0 ? `跟注 ${L.toCall}<small>剩 ${mine.chips - L.toCall}</small>` : '過牌<small>&nbsp;</small>';
+      U.raiseBtn.textContent = s.currentBet > 0 ? '加注' : '下注';
+      U.fold.disabled = U.call.disabled = false; U.raiseBtn.disabled = !L.raise;
+      U.fold.onclick = () => send('fold');
+      U.call.onclick = () => send(L.toCall > 0 ? 'call' : 'check');
+      U.raiseBtn.onclick = () => U.raise.classList.contains('open') ? this._closeRaise() : this._openRaise(L);
+      U.rok.onclick = () => send(this._R.v >= L.maxRaise ? 'allin' : 'raise', this._R.v);
+      this.sfx.ding();
+    } else if (!myTurn) {
+      this._closeRaise(); [U.fold, U.call, U.raiseBtn].forEach(b => { b.disabled = true; });
+      U.call.innerHTML = '跟注'; U.raiseBtn.textContent = '加注';
+    }
+
+    // ---- 紀錄（純文字寫入：玩家名稱可能來自連線賓客輸入）----
+    U.logList.replaceChildren(...s.log.map(l => { const li = document.createElement('li'); li.textContent = l; return li; }));
+
+    this._prev = {
+      hand: s.handNo, street: s.street, boardLen: s.board.length, reveal: !!s._reveal, toAct: s.toAct, myTurn: !!myTurn,
+      bet: pl.map(p => p.bet), chips: pl.map(p => p.chips), inv: pl.map(p => p.totalInvested), folded: pl.map(p => !!p.folded), acted: pl.map(p => !!p.acted), last: pl.map(p => p.last),
+    };
     this._push(); // host 同步給賓客
   };
 
@@ -568,10 +871,15 @@ if (typeof Platform !== 'undefined') {
       const root = document.createElement('div');
       root.id = 'tx-root'; root.className = 'tx-root';
       stage.appendChild(root);
-      Texas._root = root; Texas._human = '你'; Texas._overShown = false; Texas._prevHand = null; Texas._prevBoard = 0;
+      Texas._root = root; Texas._human = '你'; Texas._overShown = false; Texas._prev = null; Texas._fxT = [];
+      // 進入遊戲的點擊就是使用者手勢：此時解鎖音效（iOS/Android 必要），並預載音檔
+      Texas.sfx.unlock(); Texas.sfx.load();
+      root.addEventListener('pointerdown', () => Texas.sfx.unlock(), { passive: true });
+      const unpeek = () => Texas._ui && Texas._ui.held.classList.remove('peek');
+      root.addEventListener('pointerup', unpeek); root.addEventListener('pointercancel', unpeek);
       if (opts && opts.online) { Texas._startOnline(opts); }
       else { Texas.O = null; Texas.newMatch('你'); }
     },
-    unmount() { Texas._clearTimers(); Texas._root = null; Texas.st = null; Texas.O = null; Texas._overShown = false; },
+    unmount() { Texas._clearTimers(); Texas._clearFx(); Texas._root = null; Texas._ui = null; Texas.st = null; Texas.O = null; Texas._overShown = false; },
   });
 }
