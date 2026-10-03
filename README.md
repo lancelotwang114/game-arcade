@@ -44,6 +44,13 @@
 
 ![騙子酒吧](docs/screenshots/liarsbar.jpg)
 
+- **西部酒館牌桌**：俯視圓木桌、搖晃的吊燈，手牌以第一人稱展開，點選 1–3 張後按「蓋 N 張，宣稱是 X」。
+- **喊騙子**：拍桌聲加上「騙子！」印章，上一手的牌逐張翻開，真牌亮綠框、假牌亮紅框。
+- **俄羅斯輪盤**：輸的人進入全螢幕演出：彈巢轉動、扳起擊錘，最後才揭曉「喀」或「砰」。
+- **音效**：酒吧環境人聲、碰杯、拍桌、真實左輪槍聲與擊錘聲，皆為實錄素材。
+
+![騙子酒吧的俄羅斯輪盤演出](docs/screenshots/liarsbar-roulette.jpg)
+
 - 牌庫 20 張：K、Q、A 各 6 張，加上 2 張萬用的鬼牌。每局指定一種桌牌。
 - 輪到你時，蓋 1–3 張牌並宣稱「都是桌牌」，或者喊上家「騙子」翻牌檢查。
 - 被抓到說謊，或抓錯人的一方，要對自己開一槍左輪（6 膛 1 發）；中彈淘汰，最後活下來的人獲勝。
@@ -96,5 +103,6 @@ python -m http.server 8080
 ## 素材與授權
 
 - 德州撲克的籌碼與撲克牌音效：[Kenney — Casino Audio](https://kenney.nl/assets/casino-audio)，CC0 授權（授權檔見 `games/texas/audio/LICENSE-kenney.txt`）。
+- 騙子酒吧的音效：[BigSoundBank](https://bigsoundbank.com)（酒吧環境音、擊錘、碰杯）、[The Free Firearm Sound Library](https://opengameart.org/content/the-free-firearm-sound-library)（左輪槍聲）、[Kenney](https://kenney.nl)（拍桌、玻璃、撲克牌），皆為 CC0 授權，逐檔來源見 `games/liarsbar/audio/CREDITS.txt`。
 - 麻將牌、撲克牌面、牌背等圖像素材為自製或衍生作品。
 - 程式碼為個人作品。

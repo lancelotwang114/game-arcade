@@ -64,6 +64,7 @@ const LiarsBar = {
     for (let c = 0; c < 5; c++) for (const p of alive) p.hand.push(deck[di++]);
     alive.forEach(p => p.hand.sort((a, b) => this._sortKey(a) - this._sortKey(b)));
     s.turn = s.players[starter] && s.players[starter].alive ? starter : this._aliveIdx(starter, true);
+    this._dealtAt = Date.now(); // 發牌動畫期間電腦不出手（見 tick）
     this.log(`🍺 新一局：桌牌是 ${this.face(s.tableRank)}（共發 ${alive.length * 5} 張）`);
   },
   _sortKey(c) { return ({ K: 0, Q: 1, A: 2, JOKER: 3 })[c.r]; },
@@ -78,7 +79,6 @@ const LiarsBar = {
     cards.forEach(c => { const k = p.hand.indexOf(c); if (k >= 0) p.hand.splice(k, 1); });
     s.lastPlay = { by: idx, cards, count: cards.length };
     this.log(`${p.name} 蓋下 ${cards.length} 張，宣稱都是 ${this.face(s.tableRank)}`);
-    if (typeof Platform !== 'undefined') Platform.audio && Platform.audio.deal();
     this.nextTurn();
   },
 
@@ -95,31 +95,28 @@ const LiarsBar = {
     s._reveal = lp.cards.slice();
     s._challenger = byIdx;
     if (this.render) this.render();
-    this._after(1100, () => this.doShoot(shooter, byIdx));
+    this._after(3800, () => this.doShoot(shooter, byIdx)); // 等「騙子！」印章 + 翻牌演出
   },
 
   doShoot(shooterIdx, challengerIdx) {
     const s = this.st, p = s.players[shooterIdx];
-    if (typeof Platform !== 'undefined' && Platform.audio) Platform.audio.alert();
     const hit = this.pullTrigger(p.gun);
     if (hit) {
       p.alive = false;
       this.log(`💥 砰！${p.name} 中彈淘汰（第 ${p.gun.fired} 槍）`);
-      if (typeof Platform !== 'undefined' && Platform.audio) Platform.audio.shot();
     } else {
       this.log(`😮‍💨 喀！${p.name} 逃過一劫（已擊發 ${p.gun.fired}/6）`);
-      if (typeof Platform !== 'undefined' && Platform.audio) Platform.audio.empty();
     }
     s._shot = { seat: shooterIdx, hit, fired: p.gun.fired }; // 觸發左輪開火動畫
     if (this.render) this.render();
 
     if (this._aliveCount() <= 1) {
-      this._after(1600, () => { s._shot = null; s._reveal = null; this.endMatch(); });
+      this._after(7000, () => { s._shot = null; s._reveal = null; this.endMatch(); }); // 等俄羅斯輪盤演出
       return;
     }
     // 下一局：開槍者若存活從他開始，否則從質疑者後一位存活者
     const starter = p.alive ? shooterIdx : this._aliveIdx(shooterIdx, false);
-    this._after(1700, () => { s._shot = null; s._reveal = null; this.deal(starter); if (this.render) this.render(); this.tick(); });
+    this._after(7000, () => { s._shot = null; s._reveal = null; this.deal(starter); if (this.render) this.render(); this.tick(); });
   },
 
   nextTurn() {
@@ -135,7 +132,7 @@ const LiarsBar = {
     if (!s || s.phase === 'over') return;
     const p = s.players[s.turn];
     if (!p.alive) { this.nextTurn(); return; }
-    if (p.isAI) this._after(800, () => this.aiAct(s.turn));
+    if (p.isAI) this._after(Math.max(1200 + Math.random() * 600, (this._dealtAt || 0) + 4300 - Date.now()), () => this.aiAct(s.turn));
   },
 
   // ---------- AI ----------
@@ -353,122 +350,329 @@ if (typeof Platform !== 'undefined') {
     });
   };
 
-  // 左輪：玩家自製圖（待機 / 開火）。shot 存在時開火（hit→換開火圖+後座，blank→小抖動）
-  LiarsBar._revolverSVG = function (shot) {
-    const cls = shot ? 'firing ' + (shot.hit ? 'hit' : 'blank') : '';
-    return `<div class="lb-gun2 ${cls}" aria-hidden="true">
-      <img class="lb-gun-idle" src="games/liarsbar/anim/idle.png" alt="">
-      <img class="lb-gun-fire" src="games/liarsbar/anim/fire.png" alt="">
-    </div>`;
+  // ================= 畫面層 v2（西部酒館）：骨架只建一次，依「前後狀態差異」觸發動畫與音效 =================
+  // 動畫/音效純裝飾：DOM 最終狀態同步寫入，不依賴動畫結束回呼；唯一刻意延後的是開槍結果（輪盤轉完才揭曉）
+  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ini = nm => { const ch = [...(nm || '?')]; const last = ch[ch.length - 1]; return /[一-鿿]/.test(last) ? last : ch[0].toUpperCase(); };
+  const faceOf = r => r === 'JOKER' ? '★' : r;
+  const cardHTML = (r, cls = '', st = '') => `<div class="lb-card ${r === 'JOKER' ? 'joker' : ''} ${cls}" style="${st}"><span>${faceOf(r)}</span><i class="lb-cback"></i></div>`;
+  const backHTML = (cls = '', st = '') => `<div class="lb-card back ${cls}" style="${st}"></div>`;
+  const ROULETTE_OUT = 4300; // 開輪盤 → 揭曉結果的時間（ms）
+
+  // ---------- 音效：全部為 CC0 實錄（來源見 games/liarsbar/audio/CREDITS.txt）----------
+  LiarsBar.sfx = {
+    buf: {}, _ld: null, amb: null,
+    FILES: { ambience: 'ambience.mp3', 'shot-1': 'shot-1.wav', 'shot-2': 'shot-2.wav', 'cock-1': 'cock-1.mp3', 'cock-2': 'cock-2.mp3', click: 'click.mp3',
+      'toast-1': 'toast-1.mp3', 'toast-2': 'toast-2.mp3', 'slam-1': 'slam-1.wav', 'slam-2': 'slam-2.wav', 'slam-3': 'slam-3.wav',
+      'glass-1': 'glass-1.wav', 'glass-2': 'glass-2.wav', 'glass-3': 'glass-3.wav', shuffle: 'card-shuffle.wav',
+      'slide-1': 'card-slide-1.wav', 'slide-2': 'card-slide-2.wav', 'slide-3': 'card-slide-3.wav',
+      'place-1': 'card-place-1.wav', 'place-2': 'card-place-2.wav', 'place-3': 'card-place-3.wav', shove: 'card-shove-1.wav' },
+    ac() { return Platform.audio && Platform.audio._ac(); },
+    load() {
+      if (this._ld) return this._ld; const ac = this.ac(); if (!ac) return Promise.resolve();
+      // decodeAudioData 用回呼寫法：舊版 iOS Safari 不支援 Promise 版
+      return this._ld = Promise.all(Object.entries(this.FILES).map(([k, f]) => fetch(`games/liarsbar/audio/${f}`).then(r => r.arrayBuffer())
+        .then(a => new Promise((ok, no) => ac.decodeAudioData(a, ok, no))).then(b => { this.buf[k] = b; }).catch(() => {})));
+    },
+    // iOS/Android：須在使用者手勢內恢復 AudioContext 並播一段靜音
+    unlock() { const ac = this.ac(); if (!ac) return; try { const s = ac.createBufferSource(); s.buffer = ac.createBuffer(1, 1, 22050); s.connect(ac.destination); s.start(0); } catch (e) {} },
+    play(name, { gain = .8, when = 0, rate = 1, jitter = true } = {}) {
+      if (!Platform.audio.enabled) return; const ac = this.ac(); if (!ac) return;
+      const keys = Object.keys(this.buf).filter(k => k === name || k.startsWith(name + '-')); if (!keys.length) return;
+      const s = ac.createBufferSource(), g = ac.createGain();
+      s.buffer = this.buf[keys[Math.random() * keys.length | 0]]; s.playbackRate.value = rate * (jitter ? .96 + Math.random() * .08 : 1);
+      g.gain.value = gain * Platform.audio.vol; s.connect(g).connect(ac.destination); s.start(ac.currentTime + when);
+    },
+    // 酒吧環境音（循環）；duck 讓開槍時壓低
+    ambience(on) {
+      const ac = this.ac(); if (!ac) return;
+      if (on && Platform.audio.enabled && !this.amb && this.buf.ambience) {
+        const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = this.buf.ambience; s.loop = true;
+        g.gain.setValueAtTime(0, ac.currentTime); g.gain.linearRampToValueAtTime(.32 * Platform.audio.vol, ac.currentTime + 2);
+        s.connect(g).connect(ac.destination); s.start(); this.amb = { s, g };
+      }
+      if (!on && this.amb) { const a = this.amb; this.amb = null; a.g.gain.linearRampToValueAtTime(0, ac.currentTime + .5); setTimeout(() => { try { a.s.stop(); } catch (e) {} }, 600); }
+    },
+    duck(level, sec) { if (!this.amb) return; const ac = this.ac(), t = ac.currentTime; this.amb.g.gain.cancelScheduledValues(t); this.amb.g.gain.linearRampToValueAtTime(level * Platform.audio.vol, t + sec); },
+    // 轉輪盤：擊錘「喀」聲連續剪接，間隔由快到慢
+    spin(dur = 2) { let t = 0, gap = .035; while (t < dur) { this.play('click', { when: t, gain: .35, rate: 1.7 }); t += gap; gap *= 1.09; } },
   };
 
-  // ---------- 遊戲畫面 ----------
+  // ---------- 左輪 SVG（側面）與彈巢正面 ----------
+  const GUN_SVG = `<svg viewBox="0 0 260 130" aria-hidden="true">
+    <defs><linearGradient id="lbgm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfd3d8"/><stop offset=".45" stop-color="#8a9097"/><stop offset="1" stop-color="#3d4248"/></linearGradient>
+      <linearGradient id="lbgw" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a4a22"/><stop offset="1" stop-color="#3e1d0b"/></linearGradient></defs>
+    <rect x="120" y="36" width="132" height="15" rx="3" fill="url(#lbgm)"/><rect x="244" y="30" width="6" height="7" rx="1" fill="#5c6168"/>
+    <rect x="150" y="53" width="86" height="7" rx="3" fill="url(#lbgm)"/>
+    <path d="M58 30 L124 30 L124 64 L104 74 L66 74 L50 60 Z" fill="url(#lbgm)"/>
+    <rect x="72" y="26" width="52" height="44" rx="9" fill="url(#lbgm)" stroke="#2c3036"/>
+    <g stroke="#3a3f45" stroke-width="2"><line x1="80" y1="30" x2="80" y2="66"/><line x1="92" y1="30" x2="92" y2="66"/><line x1="104" y1="30" x2="104" y2="66"/><line x1="116" y1="30" x2="116" y2="66"/></g>
+    <g class="lb-hammer"><path d="M60 34 L70 26 L58 12 L50 16 L56 26 Z" fill="#6b7178" stroke="#2c3036"/></g>
+    <path d="M74 74 C74 92 98 96 104 76" fill="none" stroke="url(#lbgm)" stroke-width="5"/>
+    <path d="M86 74 C86 84 90 88 92 82" fill="none" stroke="#3d4248" stroke-width="5" stroke-linecap="round"/>
+    <path d="M50 58 L66 74 L48 122 C40 128 18 124 14 116 L34 66 Z" fill="url(#lbgw)" stroke="#2a1306"/>
+    <circle cx="38" cy="96" r="3" fill="#d8b15a"/></svg>`;
+  const cylSVG = fired => {
+    const ch = [0, 1, 2, 3, 4, 5].map(k => { const a = (k * 60 - 90) * Math.PI / 180, x = Math.cos(a) * 34, y = Math.sin(a) * 34;
+      return `<g class="lb-ch" data-k="${k}"><circle cx="${x}" cy="${y}" r="13" fill="#0b0b0b" stroke="#555" stroke-width="1.5"/>
+        ${k < fired ? '' : `<circle cx="${x}" cy="${y}" r="10.5" fill="url(#lbbr)"/><circle cx="${x}" cy="${y}" r="3.5" fill="#b9a46a" stroke="#6b5420"/>`}</g>`; }).join('');
+    const fl = [0, 1, 2, 3, 4, 5].map(k => { const a = (k * 60 - 60) * Math.PI / 180, x = Math.cos(a) * 51, y = Math.sin(a) * 51;
+      return `<ellipse cx="${x}" cy="${y}" rx="5" ry="9" transform="rotate(${k * 60 + 30} ${x} ${y})" fill="#2a2d31"/>`; }).join('');
+    return `<svg viewBox="-70 -78 140 148" aria-hidden="true"><defs>
+      <radialGradient id="lbcm" cx=".4" cy=".35"><stop offset="0" stop-color="#d9dde2"/><stop offset=".6" stop-color="#7d838a"/><stop offset="1" stop-color="#3a3e43"/></radialGradient>
+      <radialGradient id="lbbr" cx=".4" cy=".35"><stop offset="0" stop-color="#ffe7a3"/><stop offset=".6" stop-color="#c9952e"/><stop offset="1" stop-color="#7a5313"/></radialGradient></defs>
+      <path d="M0 -76 L-9 -62 L9 -62 Z" fill="#c8372d"/>
+      <g class="lb-rot"><circle r="58" fill="url(#lbcm)" stroke="#24272b" stroke-width="2"/>${fl}${ch}<circle r="9" fill="#2a2d31" stroke="#888"/></g></svg>`;
+  };
+
+  // ---------- 小工具 ----------
+  LiarsBar._fx = function (fn, ms) { this._fxT.push(setTimeout(fn, reduced() ? 0 : ms)); };
+  LiarsBar._clearFx = function () { (this._fxT || []).forEach(clearTimeout); this._fxT = []; if (this._root) this._root.querySelectorAll('.lb-fly').forEach(e => e.remove()); };
+  LiarsBar._fly = function (from, to, html, dur, delay = 0) {
+    if (!from || !to || reduced()) return;
+    const a = from.getBoundingClientRect(), b = to.getBoundingClientRect(); if (!a.width || !b.width) return;
+    const w = document.createElement('div'); w.className = 'lb-fly'; w.innerHTML = html; this._root.appendChild(w);
+    const at = (r, rot) => `translate(${r.left + r.width / 2}px,${r.top + r.height / 2}px) translate(-50%,-50%) rotate(${rot}deg)`;
+    w.animate([{ transform: at(a, -8) }, { transform: at(b, Math.random() * 30 - 15) }], { duration: dur, delay, easing: 'cubic-bezier(.3,.7,.25,1)', fill: 'both' });
+    this._fx(() => w.remove(), dur + delay + 40);
+  };
+  const restart = (el, c) => { el.classList.remove(c); void el.offsetWidth; el.classList.add(c); };
+  LiarsBar._say = function (k, txt, cls = '') { const b = this._ui.bub[k]; b.textContent = txt; b.className = 'lb-bub ' + cls; restart(b, 'pop'); };
+  LiarsBar._pileAdd = function (n, delay) {
+    const pile = this._ui.pile;
+    for (let j = 0; j < n; j++) {
+      const k = pile.children.length;
+      pile.insertAdjacentHTML('beforeend', backHTML('in', `--d:${delay + j * 160}ms;translate:calc(-50% + ${(k % 6) * 9 - 22}px) calc(-50% + ${(k % 2) * 4}px);rotate:${(k * 37 % 24) - 12}deg`));
+    }
+  };
+
+  // ---------- 骨架 ----------
+  LiarsBar._build = function () {
+    const root = this._root;
+    const seat = p => `<div class="lb-seat" data-p="${p}"><div class="lb-ava"><span class="lb-ini"></span></div>
+      <div class="lb-meta"><div class="lb-nm"></div><div class="lb-cnt"><b>0</b> 張</div><div class="lb-cyl"></div></div><div class="lb-bub"></div></div>`;
+    root.innerHTML = `<div class="lb-app">
+      <header class="lb-top">
+        <div class="lb-brand">騙子酒吧</div>
+        <div class="lb-info">第 <b class="lb-rno">1</b> 巡</div>
+        <button class="lb-ibtn lb-snd" aria-label="音效開關"></button>
+        <button class="lb-ibtn lb-logbtn" aria-label="牌局紀錄">☰</button>
+      </header>
+      <main class="lb-stage">
+        ${seat(1)}${seat(2)}${seat(3)}
+        <div class="lb-center">
+          <div class="lb-tlabel">本局桌牌</div>
+          <div class="lb-tcard-wrap"></div>
+          <div class="lb-pile"></div>
+          <div class="lb-claim" aria-live="polite"></div>
+        </div>
+        <div class="lb-gunrest">${GUN_SVG}</div>
+        <div class="lb-deck"></div>
+        <div class="lb-log" aria-label="牌局紀錄"></div>
+        <div class="lb-stamp" aria-hidden="true">騙子！</div>
+      </main>
+      <section class="lb-dock" aria-label="你的手牌與行動">
+        <div class="lb-me"><div class="lb-ava"><span class="lb-ini"></span></div><div class="lb-nm"></div><div class="lb-cyl"></div><div class="lb-bub"></div></div>
+        <div class="lb-hand"></div>
+        <div class="lb-acts"><div class="lb-tip" aria-live="polite"></div>
+          <button class="lb-act play" disabled>蓋牌宣稱</button><button class="lb-act liar" disabled>騙子！</button></div>
+      </section>
+      <div class="lb-rl" role="dialog" aria-label="俄羅斯輪盤" aria-hidden="true"><div class="lb-rl-box">
+        <div class="lb-rl-who" aria-live="assertive"></div><div class="lb-rl-cyl"></div><div class="lb-rl-gun">${GUN_SVG}</div><div class="lb-rl-msg" aria-live="assertive"></div>
+      </div></div>
+      <div class="lb-flash"></div>
+    </div>`;
+    const q = s => root.querySelector(s);
+    const U = this._ui = {
+      app: q('.lb-app'), rno: q('.lb-rno'), tcard: q('.lb-tcard-wrap'), pile: q('.lb-pile'), claim: q('.lb-claim'), deck: q('.lb-deck'), log: q('.lb-log'),
+      stamp: q('.lb-stamp'), hand: q('.lb-hand'), tip: q('.lb-tip'), play: q('.lb-act.play'), liar: q('.lb-act.liar'), snd: q('.lb-snd'),
+      rl: q('.lb-rl'), rlWho: q('.lb-rl-who'), rlCyl: q('.lb-rl-cyl'), rlGun: q('.lb-rl-gun'), rlMsg: q('.lb-rl-msg'), flash: q('.lb-flash'),
+      seat: [q('.lb-me'), ...[1, 2, 3].map(p => q(`.lb-seat[data-p="${p}"]`))],
+    };
+    U.ava = U.seat.map(e => e.querySelector('.lb-ava')); U.bub = U.seat.map(e => e.querySelector('.lb-bub')); U.cyl = U.seat.map(e => e.querySelector('.lb-cyl'));
+    this._prev = null; this._pend = null; this._handKey = ''; this._sel = new Set();
+    const sndIcon = () => { const on = Platform.audio.enabled; U.snd.textContent = on ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(on)); };
+    sndIcon();
+    U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); this.sfx.ambience(Platform.audio.enabled); };
+    q('.lb-logbtn').onclick = () => U.log.classList.toggle('open');
+  };
+
+  // ---------- 俄羅斯輪盤演出：開槍結果在 ROULETTE_OUT 後才揭曉 ----------
+  LiarsBar._roulette = function (k, name, firedBefore, hit, onReveal) {
+    const U = this._ui, sfx = this.sfx;
+    U.rlWho.textContent = `${name} 扣下扳機`; const sm = document.createElement('small'); sm.textContent = `已擊發 ${firedBefore} / 6 膛`; U.rlWho.append(sm);
+    U.rlCyl.innerHTML = cylSVG(firedBefore); U.rlMsg.textContent = ''; U.rlMsg.className = 'lb-rl-msg';
+    U.rl.classList.add('on'); U.rl.setAttribute('aria-hidden', 'false'); sfx.duck(.04, .5);
+    const rot = U.rlCyl.querySelector('.lb-rot'), hammer = U.rlGun.querySelector('.lb-hammer');
+    this._fx(() => { sfx.spin(2); rot.style.transform = `rotate(${-(firedBefore * 60) - 1080}deg)`; }, 600);
+    this._fx(() => { hammer.classList.add('cocked'); sfx.play('cock', { gain: 1, jitter: false }); }, 2900);
+    this._fx(() => {
+      hammer.classList.remove('cocked');
+      const ch = U.rlCyl.querySelector(`.lb-ch[data-k="${firedBefore}"]`);
+      if (hit) {
+        sfx.play('shot', { gain: 1, jitter: false }); restart(U.flash, 'go'); restart(U.app, 'shake');
+        if (ch) ch.querySelector('circle').setAttribute('fill', '#ff3b2f');
+        U.rlMsg.textContent = '砰！'; U.rlMsg.className = 'lb-rl-msg bang';
+      } else {
+        sfx.play('click', { gain: 1, jitter: false });
+        if (ch) [...ch.querySelectorAll('circle')].slice(1).forEach(c => c.remove());
+        U.rlMsg.textContent = '喀…空膛'; U.rlMsg.className = 'lb-rl-msg click';
+      }
+      onReveal();
+    }, ROULETTE_OUT);
+    this._fx(() => { U.rl.classList.remove('on'); U.rl.setAttribute('aria-hidden', 'true'); sfx.duck(.32, 1.2); if (!hit) sfx.play('glass', { gain: .5 }); }, ROULETTE_OUT + 1900);
+  };
+
+  // ---------- 主渲染 ----------
   LiarsBar.render = function () {
     const root = this._root; if (!root) return;
     const O = this.O;
     if (O && !O.started) { this._renderRoom(); return; }
     const s = this.st; if (!s) return;
-    const meSeat = O ? O.mySeat : 0;
-    const me = s.players[meSeat];
-    const myTurn = s.turn === meSeat && s.phase === 'play' && me.alive;
-    const isHost = !O || O.isHost;
-    const shot = s._shot;
-    const calling = s.phase === 'reveal' && !shot; // 剛喊騙子、翻牌瞬間
+    if (!root.querySelector('.lb-app')) this._build();
+    const U = this._ui, me = O ? O.mySeat : 0, pl = s.players, N = pl.length, isHost = !O || O.isHost;
+    const pos = i => (i - me + N) % N; // 0 自己（下）、1 右、2 上、3 左
+    const P = this._prev, newRound = !P || P.round !== s.roundNo, mine = pl[me];
+    const total = pl.reduce((a, p) => a + p.hand.length, 0);
+    let t = 0;
+    const pendNow = () => this._pend && Date.now() < this._pend.until ? this._pend : null; // 開槍結果尚未揭曉（即時讀，本次渲染中途可能才登記）
+    const pend = pendNow();
 
-    const N = s.players.length;
-    const POS = ['', 'pos-r', 'pos-t', 'pos-l'];
-    const gun = n => Array.from({ length: 6 }, (_, k) => `<i class="ch ${k < n ? 'spent' : ''}"></i>`).join('');
+    U.rno.textContent = s.roundNo;
+    // ---- 座位：名字、張數、彈膛、存活（揭曉前沿用開槍前狀態）----
+    const paintSeat = i => {
+      const pend = pendNow(), k = pos(i), p = pl[i], hold = pend && pend.seat === i;
+      U.seat[k].querySelector('.lb-ini').textContent = ini(p.name);
+      U.seat[k].querySelector('.lb-nm').textContent = p.name;
+      const fired = hold ? pend.fired - 1 : p.gun.fired;
+      U.cyl[k].innerHTML = [0, 1, 2, 3, 4, 5].map(c => `<i class="${c < fired ? 'fired' : ''}"></i>`).join('');
+      U.cyl[k].title = `已擊發 ${fired}/6`;
+      U.seat[k].classList.toggle('dead', hold ? false : !p.alive);
+      U.seat[k].classList.toggle('warn', fired >= 4);
+      if (k) U.seat[k].querySelector('.lb-cnt b').textContent = p.hand.length;
+    };
+    pl.forEach((p, i) => paintSeat(i));
 
-    const oppHtml = s.players.map((p, i) => {
-      if (i === meSeat) return '';
-      const pos = (i - meSeat + N) % N;
-      const danger = p.gun.fired >= 4 ? 'danger' : p.gun.fired >= 2 ? 'warn' : '';
-      const shooting = shot && shot.seat === i ? (shot.hit ? 'shooting hit' : 'shooting') : '';
-      return `<div class="lb-seat ${POS[pos]} ${p.alive ? '' : 'dead'} ${s.turn === i ? 'active' : ''} ${shooting}">
-        <div class="lb-pinfo"><span class="lb-name">${p.name}</span><span class="lb-count">🂠 ${p.hand.length}</span></div>
-        <div class="lb-gun ${danger}" title="已擊發 ${p.gun.fired}/6">${gun(p.gun.fired)}</div>
-        ${p.alive ? '' : '<div class="lb-x">☠</div>'}
-      </div>`;
-    }).join('');
-
-    const selfDanger = me.gun.fired >= 4 ? 'danger' : me.gun.fired >= 2 ? 'warn' : '';
-    const selfShooting = shot && shot.seat === meSeat ? (shot.hit ? 'shooting hit' : 'shooting') : '';
-    root.innerHTML = `
-      <div class="lb-room ${shot && shot.hit ? 'shake' : ''}">
-        <div class="lb-lamp"></div>
-        <div class="lb-sign">騙子酒吧</div>
-        <div class="lb-table">
-          ${oppHtml}
-          <div class="lb-center">
-            <div class="lb-eyebrow">本局桌牌 · 第 ${s.roundNo} 巡</div>
-            <div class="lb-rankcard" id="lb-rankcard"></div>
-            <div class="lb-pile" id="lb-pile"></div>
-            <div class="lb-claim">${s.lastPlay ? `「這 ${s.lastPlay.count} 張，都是 ${this.face(s.tableRank)}」— ${s.players[s.lastPlay.by].name}` : '把牌蓋上，賭一張嘴。'}</div>
-            <div class="lb-revwrap">${this._revolverSVG(shot)}</div>
-            ${calling ? '<div class="lb-callstamp">騙子！</div>' : ''}
-          </div>
-          <div class="lb-log">${s.log.map(l => `<div>${l}</div>`).join('')}</div>
-          <div class="lb-self ${myTurn ? 'active' : ''} ${me.alive ? '' : 'dead'} ${selfShooting}">
-            <div class="lb-selfbar"><span class="lb-name">${me.name}</span><span class="lb-gun ${selfDanger}" title="已擊發 ${me.gun.fired}/6">${gun(me.gun.fired)}</span></div>
-            <div class="lb-hand" id="lb-hand"></div>
-            <div class="lb-actions">
-              <button class="tx-act call" id="lb-play">蓋牌宣稱</button>
-              <button class="tx-act danger" id="lb-challenge">喊騙子</button>
-            </div>
-            <div class="lb-hint" id="lb-hint"></div>
-          </div>
-        </div>
-      </div>`;
-
-    const rc = root.querySelector('#lb-rankcard');
-    const tc = Platform.cards.bigEl(this.face(s.tableRank), { joker: s.tableRank === 'JOKER' });
-    tc.classList.add('lb-tablecard'); rc.appendChild(tc);
-
-    const pile = root.querySelector('#lb-pile');
-    if (s._reveal) s._reveal.forEach((c, i) => { const e = Platform.cards.bigEl(this.face(c.r), { joker: c.r === 'JOKER' }); e.classList.add('lb-mini', 'lb-flip'); e.style.animationDelay = (i * 0.12) + 's'; pile.appendChild(e); });
-    else if (s.lastPlay) for (let i = 0; i < s.lastPlay.count; i++) { const e = Platform.cards.bigEl('', { back: true }); e.classList.add('lb-mini'); pile.appendChild(e); }
-
-    const handEl = root.querySelector('#lb-hand');
-    this._sel = this._sel || new Set();
-    if (!me.alive) handEl.innerHTML = '<div class="lb-dead-note">你已出局——留下來看戲。</div>';
-    me.hand.forEach((c, i) => {
-      const e = Platform.cards.bigEl(this.face(c.r), { joker: c.r === 'JOKER' });
-      if (this._sel.has(i)) e.classList.add('sel');
-      if (myTurn) {
-        const toggle = () => {
-          if (this._sel.has(i)) this._sel.delete(i);
-          else { if (this._sel.size >= 3) return Platform.toast('最多蓋 3 張'); this._sel.add(i); }
-          this.render();
-        };
-        e.onclick = toggle;
-        e.tabIndex = 0;
-        e.setAttribute('role', 'button');
-        e.setAttribute('aria-pressed', this._sel.has(i) ? 'true' : 'false');
-        e.setAttribute('aria-label', `手牌 ${this.face(c.r)}`);
-        e.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } };
+    if (newRound) {
+      // ---- 新一巡：清桌 → 洗牌 → 逐張發牌 → 翻桌牌 → 自己的牌翻面 ----
+      this._clearFx(); this._pend = null; this._handKey = ''; this._sel = new Set();
+      U.pile.innerHTML = ''; U.claim.textContent = '把牌蓋上，賭一張嘴。';
+      U.bub.forEach(b => { b.className = 'lb-bub'; });
+      U.rl.classList.remove('on'); U.rl.setAttribute('aria-hidden', 'true');
+      U.tcard.innerHTML = backHTML('lb-tcard');
+      this.sfx.play('shuffle', { gain: .7 }); if (!P) this.sfx.play('toast', { gain: .45, when: .2 });
+      const order = []; for (let k = 1; k <= N; k++) { const i = (s.turn + k - 1) % N; if (pl[i].alive && pl[i].hand.length) order.push(i); }
+      let d = 1000; const mineAt = [];
+      for (let c = 0; c < 5; c++) order.forEach(i => {
+        if (pos(i) === 0) mineAt.push(d);
+        this._fly(U.deck, pos(i) ? U.ava[pos(i)] : U.hand, backHTML('', '--w:44px'), 280, d);
+        this.sfx.play('slide', { gain: .4, when: d / 1000 }); d += 110;
+      });
+      const flipT = d + 450;
+      this._handKey = mine.hand.map(c => c.r).join() + '#' + s.roundNo;
+      U.hand.innerHTML = mine.alive ? mine.hand.map((c, j) => cardHTML(c.r, 'deal', `--d:${(mineAt[j] || d) + 280}ms;--t:${flipT + j * 80}ms`)).join('') : '';
+      this._fx(() => { U.tcard.innerHTML = cardHTML(s.tableRank, 'lb-tcard flip'); this.sfx.play('place', { gain: .9 }); }, flipT + 500);
+      this.sfx.play('place', { gain: .5, when: flipT / 1000 });
+      t = flipT + 900;
+      this.sfx.ambience(true);
+    } else {
+      // ---- 有人出牌：全場手牌總數變少 ----
+      const dec = P.total - total;
+      if (dec > 0 && s.lastPlay) {
+        const by = s.lastPlay.by, k = pos(by);
+        U.bub.forEach(b => { if (!b.classList.contains('liar')) b.className = 'lb-bub'; });
+        for (let j = 0; j < dec; j++) { this._fly(k ? U.ava[k] : U.hand, U.pile, backHTML('', '--w:44px'), 380, j * 160); this.sfx.play(k ? 'place' : 'shove', { gain: .7, when: j * .16 }); }
+        this._pileAdd(dec, 380);
+        this._say(k, `${dec} 張 ${faceOf(s.tableRank)}`);
+        U.claim.textContent = `「這 ${dec} 張，都是 ${faceOf(s.tableRank)}」— ${pl[by].name}`;
+        t = 380 + dec * 160;
       }
-      handEl.appendChild(e);
-    });
-
-    const playBtn = root.querySelector('#lb-play');
-    const chBtn = root.querySelector('#lb-challenge');
-    const hint = root.querySelector('#lb-hint');
-    const canChallenge = myTurn && s.lastPlay && s.lastPlay.by !== meSeat;
-    playBtn.disabled = !(myTurn && this._sel.size >= 1);
-    chBtn.disabled = !canChallenge;
-    if (!me.alive) hint.textContent = '';
-    else if (!myTurn) hint.textContent = s.phase === 'reveal' ? '攤牌了…' : '等別人先出手…';
-    else if (!me.hand.length) hint.textContent = '沒牌了，只能喊騙子';
-    else hint.textContent = `選 1–3 張，宣稱都是 ${this.face(s.tableRank)}；不信就喊騙子`;
-
-    const doPlay = (cards) => { if (isHost) this.play(meSeat, cards); else Platform.net.sendHost('act', { kind: 'play', cards: cards.map(c => me.hand.indexOf(c)) }); };
-    const doChallenge = () => { if (isHost) this.challenge(meSeat); else Platform.net.sendHost('act', { kind: 'challenge' }); };
-    if (myTurn) {
-      playBtn.onclick = () => { if (this._sel.size < 1) return; const cards = [...this._sel].sort((a, b) => a - b).map(i => me.hand[i]); this._sel = new Set(); doPlay(cards); };
-      if (canChallenge) chBtn.onclick = () => { this._sel = new Set(); doChallenge(); };
+      // ---- 喊騙子：拍桌 + 印章，逐張翻開上一手 ----
+      if (s._reveal && !P.reveal) {
+        const ch = s._challenger, cards = s._reveal, rank = s.tableRank;
+        this._say(pos(ch), '騙子！', 'liar');
+        this.sfx.play('slam', { gain: 1 }); restart(U.stamp, 'show'); restart(U.app, 'shake'); this.sfx.duck(.08, .3);
+        let kids = [...U.pile.children]; if (kids.length < cards.length) { this._pileAdd(cards.length - kids.length, 0); kids = [...U.pile.children]; }
+        const last = kids.slice(-cards.length);
+        let lying = false;
+        cards.forEach((c, j) => {
+          const ok = c.r === rank || c.r === 'JOKER'; lying = lying || !ok;
+          this._fx(() => { const el = last[j]; el.outerHTML = cardHTML(c.r, `flip ${ok ? 'good' : 'bad'}`, el.getAttribute('style').replace(/--d:[^;]*;?/, '')); this.sfx.play('place', { gain: .8 }); }, 1200 + j * 450);
+        });
+        const liarName = s.lastPlay ? pl[s.lastPlay.by].name : '';
+        this._fx(() => { U.claim.textContent = lying ? `${liarName} 說謊！` : `全是真的！${pl[ch].name} 喊錯了`; this.sfx.duck(.32, 1); }, 1200 + cards.length * 450 + 200);
+      }
+      // ---- 開槍：俄羅斯輪盤演出，結果延後揭曉 ----
+      if (s._shot && !P.shot) {
+        const sh = s._shot, i = sh.seat;
+        this._pend = { seat: i, fired: sh.fired, until: Date.now() + ROULETTE_OUT + 50 };
+        paintSeat(i);
+        this._roulette(pos(i), pl[i].name, sh.fired - 1, sh.hit, () => { this._pend = null; paintSeat(i); this._paintLog(); });
+      }
     }
 
+    // ---- 自己的手牌（手牌內容變了才重建；發牌時已建好）----
+    const key = mine.hand.map(c => c.r).join() + '#' + s.roundNo;
+    if (key !== this._handKey) {
+      this._handKey = key; this._sel = new Set();
+      U.hand.innerHTML = mine.alive ? mine.hand.map(c => cardHTML(c.r)).join('') : '<div class="lb-dead-note">你已出局——留下來看戲。</div>';
+    }
+    U.seat[0].querySelector('.lb-ini').textContent = ini(mine.name);
+
+    // ---- 輪到誰 + 操作 ----
+    const myTurn = s.turn === me && s.phase === 'play' && mine.alive;
+    const canLiar = myTurn && s.lastPlay && s.lastPlay.by !== me;
+    const turnTo = s.phase === 'play' ? s.turn : -1;
+    // 文案在渲染當下算好；延後執行時若已有更新的渲染，舊的直接作廢（避免舊排程讀到新狀態）
+    const meShown = mine.alive || !!(pendNow() && pendNow().seat === me); // 自己中彈：揭曉前不提早清空提示
+    const tip = !meShown || s.phase === 'over' ? '' : !myTurn ? (s.phase === 'reveal' ? '攤牌了…' : `等 ${pl[s.turn].name} 出手…`)
+      : !mine.hand.length ? '沒牌了，只能喊騙子' : `選 1–3 張，宣稱都是 ${faceOf(s.tableRank)}；不信就喊騙子`;
+    const tok = this._turnTok = (this._turnTok || 0) + 1;
+    const applyTurn = () => {
+      if (tok !== this._turnTok) return;
+      U.seat.forEach(e => e.classList.remove('turn'));
+      if (turnTo >= 0 && pl[turnTo]) U.seat[pos(turnTo)].classList.add('turn');
+      U.app.classList.toggle('myturn', myTurn);
+      U.tip.textContent = tip;
+      U.liar.disabled = !canLiar; U.liar.classList.toggle('hint', !!canLiar);
+      this._paintPlay();
+    };
+    t ? this._fx(applyTurn, t) : applyTurn();
+
+    const send = (kind, cards) => {
+      U.play.disabled = U.liar.disabled = true; U.app.classList.remove('myturn');
+      if (kind === 'liar') { if (isHost) this.challenge(me); else Platform.net.sendHost('act', { kind: 'challenge' }); }
+      else { if (isHost) this.play(me, cards.map(j => mine.hand[j])); else Platform.net.sendHost('act', { kind: 'play', cards }); }
+    };
+    U.liar.onclick = () => { if (canLiar) { this._sel = new Set(); send('liar'); } };
+    U.play.onclick = () => { if (!myTurn || this._sel.size < 1) return; const idx = [...this._sel].sort((a, b) => a - b); this._sel = new Set(); send('play', idx); };
+    [...U.hand.querySelectorAll('.lb-card')].forEach((el, j) => {
+      el.setAttribute('aria-label', `手牌 ${faceOf(mine.hand[j].r)}`);
+      if (!myTurn) { el.removeAttribute('role'); el.removeAttribute('tabindex'); el.onclick = el.onkeydown = null; return; }
+      el.setAttribute('role', 'button'); el.tabIndex = 0;
+      const toggle = () => {
+        if (!U.app.classList.contains('myturn')) return;
+        if (this._sel.has(j)) this._sel.delete(j); else { if (this._sel.size >= 3) return Platform.toast('最多蓋 3 張'); this._sel.add(j); }
+        this.sfx.play('slide', { gain: .25, rate: 1.3 }); this._paintPlay();
+      };
+      el.onclick = toggle; el.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } };
+    });
+
+    if (!pend && !(s._shot && P && !P.shot)) this._paintLog();
+    this._prev = { round: s.roundNo, total, reveal: !!s._reveal, shot: !!s._shot };
     this._push(); // host 同步狀態給賓客
+  };
+  // 手牌選取外觀 + 「蓋牌宣稱」按鈕文字
+  LiarsBar._paintPlay = function () {
+    const U = this._ui, myTurn = U.app.classList.contains('myturn'), n = this._sel.size, r = faceOf(this.st.tableRank);
+    [...U.hand.querySelectorAll('.lb-card')].forEach((el, j) => { el.classList.toggle('sel', this._sel.has(j)); el.setAttribute('aria-pressed', String(this._sel.has(j))); });
+    U.hand.classList.toggle('locked', !myTurn);
+    U.play.disabled = !(myTurn && n >= 1); U.play.textContent = n ? `蓋 ${n} 張，宣稱是 ${r}` : '蓋牌宣稱';
+  };
+  // 紀錄（純文字寫入：玩家名稱可能來自連線賓客輸入）
+  LiarsBar._paintLog = function () {
+    const U = this._ui; if (!U || !this.st) return;
+    U.log.replaceChildren(...this.st.log.slice(0, 5).map(l => { const d = document.createElement('div'); d.textContent = l; return d; }));
   };
 
   Platform.register({
@@ -480,10 +684,14 @@ if (typeof Platform !== 'undefined') {
       const root = document.createElement('div');
       root.id = 'lb-root'; root.className = 'lb-root';
       stage.appendChild(root);
-      LiarsBar._root = root; LiarsBar._human = '你'; LiarsBar._sel = new Set(); LiarsBar._overShown = false;
+      LiarsBar._root = root; LiarsBar._human = '你'; LiarsBar._sel = new Set(); LiarsBar._overShown = false; LiarsBar._prev = null; LiarsBar._fxT = [];
+      // 進場點擊即使用者手勢：解鎖音效（iOS/Android 必要）並預載；環境音載入後才開始
+      LiarsBar.sfx.unlock(); LiarsBar.sfx.load().then(() => { if (LiarsBar._root && LiarsBar.st) LiarsBar.sfx.ambience(true); });
+      root.addEventListener('pointerdown', () => LiarsBar.sfx.unlock(), { passive: true });
       if (opts && opts.online) { LiarsBar._startOnline(opts); }
       else { LiarsBar.O = null; LiarsBar.newMatch('你'); LiarsBar.render(); LiarsBar.tick(); }
     },
-    unmount() { LiarsBar._clearTimers(); LiarsBar._root = null; LiarsBar.st = null; LiarsBar._reveal = null; LiarsBar.O = null; LiarsBar._overShown = false; },
+    unmount() { LiarsBar._clearTimers(); LiarsBar._clearFx(); LiarsBar.sfx.ambience(false); LiarsBar._root = null; LiarsBar._ui = null; LiarsBar.st = null; LiarsBar._reveal = null; LiarsBar.O = null; LiarsBar._overShown = false; },
   });
 }
+

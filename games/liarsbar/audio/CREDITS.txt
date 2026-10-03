@@ -1,0 +1,18 @@
+騙子酒吧音效來源（皆為 CC0 公眾領域，可商用、不需標示；仍列出以示感謝）
+
+BigSoundBank — https://bigsoundbank.com （CC0）
+  ambience.mp3   #0480 Atmosphere Bar #2
+  cock-1.mp3     #1992 Pistol, cocking hammer #1
+  cock-2.mp3     #1993 Pistol, cocking hammer #2
+  click.mp3      #1994 Pistol, disarming hammer #1（用作空膛擊發與轉輪盤喀聲）
+  toast-1.mp3    #1335 Cheers, Champagne Flute #1
+  toast-2.mp3    #2888 Clink of glass, Toast #3
+
+The Free Firearm Sound Library — https://opengameart.org/content/the-free-firearm-sound-library （CC0）
+  shot-1.wav     Smith & Wesson 642 .38 Special，V_27P 近距離，擷取單發、轉 32kHz 單聲道
+  shot-2.wav     Smith & Wesson 642 .38 Special，V_22P 中距離，擷取單發、轉 32kHz 單聲道
+
+Kenney — https://kenney.nl （CC0）
+  slam-1..3.wav  Impact Sounds：impactWood_heavy_000..002（轉 WAV）
+  glass-1..3.wav Impact Sounds：impactGlass_light_000..002（轉 WAV）
+  card-*.wav     Casino Audio：card-shuffle / card-slide / card-place / card-shove

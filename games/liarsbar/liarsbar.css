@@ -1,132 +1,190 @@
-/* 騙子酒吧 — 「Last Call」昏暗後巷酒吧 / 左輪對峙 */
+/* 騙子酒吧 v2 — 西部酒館：俯視圓木桌、第一人稱手牌、俄羅斯輪盤演出 */
 .lb-root {
   position: fixed; inset: 0; overflow: hidden;
-  --night: #120c07; --wood: #3a2616; --wood-d: #241710;
-  --amber: #e8a23c; --amber-2: #f3c372; --blood: #b53029; --blood-2: #d24a3f;
-  --bone: #ece0c8; --steel: #5a6068; --dim: #a8997f;
-  /* 讓共用 .tx-act 按鈕在此情境解析得到色票 */
-  --brass: #e8a23c; --brass-2: #f3c372; --ink: #ece0c8; --o: 'Oswald','Noto Sans TC',sans-serif;
-  color: var(--bone); font-family: 'Noto Sans TC', system-ui, sans-serif;
-  background: radial-gradient(62% 46% at 50% 34%, #2c1e12 0%, #160f09 46%, #0a0705 100%);
+  --ink: #f3e6cc; --muted: #c4ad87; --accent: #f0b54a; --accent-ink: #2a1803; --danger: #c8372d;
+  --panel: rgba(28,18,10,.9); --line: rgba(240,181,74,.35);
+  --card: linear-gradient(160deg, #fbf3e0, #e9dcbd); --card-ink: #2a1a0c;
+  --back: repeating-linear-gradient(45deg, #6a2318 0 6px, #7f2d1f 6px 12px); --back-line: #e0b064;
+  --num: 'Oswald', 'Noto Sans TC', sans-serif;
+  background: radial-gradient(70% 60% at 50% 30%, #3a2716 0%, #1b120a 55%, #0b0705 100%); background-color: #0b0705;
+  color: var(--ink); font-family: 'Noto Sans TC', system-ui, sans-serif;
 }
+.lb-app { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+.lb-app button { font: inherit; color: inherit; cursor: pointer; }
 
-/* 吊燈光暈 + 招牌 */
-.lb-lamp { position: absolute; top: -6%; left: 50%; width: 72%; height: 78%; transform: translateX(-50%);
-  pointer-events: none; transform-origin: 50% 0;
-  background: radial-gradient(48% 58% at 50% 0%, rgba(243,195,114,.30), rgba(243,195,114,.07) 42%, transparent 72%);
-  animation: lampSway 7s ease-in-out infinite; }
-.lb-lamp::after { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-  width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff2cf, #e8a23c);
-  box-shadow: 0 0 26px 8px rgba(243,195,114,.7); }
-.lb-sign { position: absolute; top: 20px; left: 124px; z-index: 4; /* 放在「← 回大廳」右側，避開正上方座位 */
-  font-family: 'Rye', serif; font-size: 22px; letter-spacing: .14em; color: var(--amber-2);
-  text-shadow: 0 1px 0 #000, 0 0 18px rgba(232,162,60,.5); opacity: .9; }
+/* 頂列：左側留給平台「← 回大廳」 */
+.lb-top { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px 140px; z-index: 30; min-height: 68px; }
+.lb-brand { font-family: 'Rye', serif; font-size: 22px; letter-spacing: .1em; color: var(--accent); text-shadow: 0 0 16px rgba(240,181,74,.4); white-space: nowrap; }
+.lb-info { flex: 1; text-align: center; font-size: 13px; color: var(--muted); }
+.lb-info b { font-family: var(--num); color: var(--ink); }
+.lb-ibtn { min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); font-size: 15px; }
+.lb-ibtn:focus-visible, .lb-act:focus-visible, .lb-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-/* 圓木桌 */
-.lb-table { position: absolute; inset: 0; }
-.lb-table::before { content: ''; position: absolute; top: 47%; left: 50%; transform: translate(-50%,-50%);
-  width: min(840px, 82vw); height: min(470px, 60vh); border-radius: 50%;
-  background: radial-gradient(closest-side, #43301d, #2c1d11 68%, #1b120a);
-  box-shadow: 0 0 0 12px #1c120a, 0 0 0 15px #0c0805, 0 30px 70px rgba(0,0,0,.7),
-    inset 0 0 90px rgba(0,0,0,.6), inset 0 14px 40px rgba(243,195,114,.12); }
+/* 牌桌：圓木桌 + 搖晃的吊燈 */
+.lb-stage { position: relative; min-height: 0; }
+.lb-stage::before { content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 1;
+  width: min(900px, 86vw); height: min(520px, 62vh); border-radius: 50%;
+  background: repeating-radial-gradient(ellipse at 50% 50%, #5b3a1f 0 10px, #503219 10px 22px), radial-gradient(closest-side, #6a4424, #3a2412);
+  background-blend-mode: overlay;
+  box-shadow: 0 0 0 14px #2a1a0d, 0 0 0 17px #120a05, 0 30px 70px rgba(0,0,0,.7), inset 0 0 90px rgba(0,0,0,.65), inset 0 14px 40px rgba(240,181,74,.15); }
+.lb-stage::after { content: ''; position: absolute; left: 50%; top: -10%; width: 70%; height: 90%; transform: translateX(-50%); z-index: 0; pointer-events: none;
+  background: radial-gradient(45% 55% at 50% 0%, rgba(255,200,120,.28), transparent 70%); animation: lbSway 7s ease-in-out infinite; }
+@keyframes lbSway { 50% { transform: translateX(-50%) rotate(2deg); } }
 
-/* 座位（酒客） */
-.lb-seat { position: absolute; width: 150px; padding: 9px 12px 11px; text-align: center; z-index: 3;
-  background: linear-gradient(180deg, rgba(30,20,12,.9), rgba(20,13,8,.7)); border: 1px solid rgba(232,162,60,.22);
-  border-radius: 12px; transition: box-shadow .25s, border-color .25s, opacity .4s; }
-.lb-seat.pos-t { left: 50%; top: 4%; transform: translateX(-50%); }
-.lb-seat.pos-l { left: 3%; top: 40%; transform: translateY(-50%); }
-.lb-seat.pos-r { right: 3%; top: 40%; transform: translateY(-50%); }
-.lb-seat.active { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 0 26px rgba(232,162,60,.5); }
-.lb-seat.dead { opacity: .35; filter: grayscale(.85); }
-.lb-seat.shooting { border-color: var(--blood-2); }
-.lb-seat.shooting.hit { animation: seatHit .55s .15s ease-out; }
-.lb-pinfo { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-.lb-name { font-weight: 700; font-size: 15px; color: var(--bone); }
-.lb-count { font-family: var(--o); font-weight: 500; font-size: 15px; color: var(--amber-2); }
-.lb-x { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 34px; color: var(--blood-2); }
+/* 座位（data-p：1 右 / 2 上 / 3 左） */
+.lb-seat { position: absolute; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; transition: opacity .5s, filter .5s; }
+.lb-seat[data-p="2"] { left: 50%; top: 2%; translate: -50% 0; }
+.lb-seat[data-p="1"] { right: 4%; top: 32%; }
+.lb-seat[data-p="3"] { left: 4%; top: 32%; }
+.lb-meta { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.lb-ava { position: relative; width: 54px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 20px;
+  background: radial-gradient(circle at 35% 30%, #5a4128, #22160c); border: 2px solid var(--line); }
+.lb-nm { font-weight: 700; font-size: 14px; max-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-cnt { font: 600 13px var(--num); color: var(--muted); }
+.lb-cnt b { color: var(--accent); font-size: 16px; }
+.lb-cyl { display: flex; gap: 4px; }
+.lb-cyl i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--muted); }
+.lb-cyl i.fired { background: var(--muted); opacity: .5; }
+.lb-seat.warn .lb-cyl i, .lb-me.warn .lb-cyl i { border-color: var(--danger); }
+.lb-seat.turn .lb-ava, .lb-me.turn .lb-ava { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,255,255,.08), 0 0 26px var(--accent); animation: lbBreath 1.2s ease-in-out infinite; }
+@keyframes lbBreath { 50% { box-shadow: 0 0 0 3px rgba(255,255,255,.08), 0 0 8px var(--accent); } }
+.lb-seat.dead, .lb-me.dead { opacity: .35; filter: grayscale(1); }
+.lb-seat.dead .lb-ava::after, .lb-me.dead .lb-ava::after { content: '✕'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 40px; color: var(--danger); }
 
-/* 左輪彈膛點（每人） */
-.lb-gun { display: inline-flex; gap: 4px; justify-content: center; }
-.lb-gun .ch { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(232,162,60,.5);
-  background: radial-gradient(circle at 35% 30%, #2c2620, #15110d); }
-.lb-gun .ch.spent { background: #0a0a0c; border-color: #5a3a36; box-shadow: inset 0 0 3px rgba(0,0,0,.9); }
-.lb-gun.warn .ch:not(.spent) { border-color: var(--amber); }
-.lb-gun.danger .ch:not(.spent) { border-color: var(--blood-2); box-shadow: 0 0 6px rgba(210,74,63,.6); }
+/* 行動氣泡 */
+.lb-bub { position: absolute; z-index: 6; white-space: nowrap; font: 700 14px 'Noto Sans TC', sans-serif; padding: 5px 12px; border-radius: 99px;
+  background: var(--ink); color: #111; opacity: 0; pointer-events: none; top: -6px; left: calc(100% + 6px); }
+.lb-bub.liar { background: var(--danger); color: #fff; font-size: 16px; }
+.lb-bub.pop { animation: lbPop .35s cubic-bezier(.2,1.6,.4,1) forwards; }
+@keyframes lbPop { from { opacity: 0; scale: .5; } to { opacity: 1; scale: 1; } }
+.lb-seat[data-p="1"] .lb-bub { left: auto; right: calc(100% + 6px); }
+/* 上方座位橫排：省高度 */
+.lb-seat[data-p="2"] { flex-direction: row; gap: 10px; }
+.lb-seat[data-p="2"] .lb-meta { align-items: flex-start; }
+.lb-seat[data-p="2"] .lb-bub { top: 50%; translate: 0 -50%; }
+.lb-me .lb-bub { top: auto; bottom: calc(100% + 8px); left: 50%; translate: -50% 0; }
 
-/* 中央 */
-.lb-center { position: absolute; top: 45%; left: 50%; transform: translate(-50%,-50%); z-index: 2; text-align: center; width: 320px; }
-.lb-eyebrow { font-family: var(--o); font-weight: 500; letter-spacing: .3em; text-indent: .3em; font-size: 13px; color: rgba(243,195,114,.8); margin-bottom: 10px; }
-.lb-rankcard { display: flex; justify-content: center; margin-bottom: 10px; }
-.lb-tablecard { zoom: 1.2; box-shadow: 0 0 0 2px var(--amber), 0 6px 20px rgba(0,0,0,.6) !important; }
-.lb-pile { display: flex; gap: 5px; justify-content: center; min-height: 58px; align-items: center; perspective: 600px; }
-.lb-claim { font-family: 'Noto Serif TC', serif; font-size: 15px; color: var(--amber-2); min-height: 22px; margin: 6px 0 4px; font-style: italic; }
+/* 牌 */
+.lb-card { --w: 64px; width: var(--w); aspect-ratio: 5/7; border-radius: calc(var(--w) * .12); position: relative; flex-shrink: 0;
+  background: var(--card); color: var(--card-ink); box-shadow: 0 6px 14px rgba(0,0,0,.5); display: grid; place-items: center;
+  font: 700 calc(var(--w) * .52) / 1 var(--num); transition: transform .25s, translate .25s, box-shadow .25s; }
+.lb-card.joker { color: var(--danger); }
+.lb-card.back, .lb-card .lb-cback { background: var(--back); border: 2px solid var(--back-line); }
+.lb-card.back > * { display: none; }
+.lb-card .lb-cback { display: none; position: absolute; inset: -2px; border-radius: inherit; }
+.lb-card.bad { box-shadow: 0 0 0 3px var(--danger), 0 0 24px var(--danger); }
+.lb-card.good { box-shadow: 0 0 0 3px #3fd17a, 0 0 18px rgba(63,209,122,.7); }
+.lb-card.flip { animation: lbFlip .5s ease-in-out both; }
+@keyframes lbFlip { 0% { scale: 1 1; } 50% { scale: 0 1; } 100% { scale: 1 1; } }
+.lb-card.in { animation: lbAppear .01s var(--d, 0ms) both; }
+/* 發到手上：先出現牌背，到齊後翻面 */
+.lb-card.deal { animation: lbAppear .01s var(--d, 0ms) both, lbFlip .45s var(--t, 0ms) ease-in-out both; }
+.lb-card.deal .lb-cback { display: block; animation: lbHide .01s calc(var(--t, 0ms) + 220ms) both; }
+@keyframes lbAppear { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lbHide { from { opacity: 1; } to { opacity: 0; } }
 
-/* 牌面（worn bone） */
-.lb-room .pcard { background: linear-gradient(165deg, #f3ead4, #e2d3b4); border: 1px solid #c9b48a; box-shadow: 0 3px 7px rgba(0,0,0,.5); }
-.lb-room .pcard.big .pc-big { color: #2a1d12; }
-.lb-room .pcard.big.joker .pc-big { color: var(--blood); }
-.lb-room .pcard.back { background: repeating-linear-gradient(45deg, #6b2420, #6b2420 5px, #4a1714 5px, #4a1714 10px); border: 2px solid var(--amber); }
-.lb-mini { width: 46px !important; height: 64px !important; }
-.lb-mini .pc-big { font-size: 26px !important; }
-.lb-flip { animation: flipIn .42s ease both; transform-origin: bottom center; }
-.lb-hand .pcard { cursor: pointer; transition: transform .12s, box-shadow .12s; }
+/* 桌牌 / 牌堆 / 宣稱 */
+.lb-center { position: absolute; z-index: 3; left: 50%; top: 31%; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.lb-tlabel { font: 600 13px var(--num); letter-spacing: .35em; text-indent: .35em; color: var(--muted); }
+.lb-tcard { --w: 78px; }
+.lb-pile { position: relative; width: 140px; height: 76px; }
+.lb-pile .lb-card { --w: 46px; position: absolute; left: 50%; top: 50%; }
+.lb-claim { min-height: 22px; font: 700 15px 'Noto Sans TC', sans-serif; color: var(--accent); text-align: center; max-width: 80vw; }
+.lb-deck { position: absolute; left: 50%; top: 40%; width: 1px; height: 1px; }
+.lb-gunrest { position: absolute; z-index: 2; left: 71%; top: 72%; width: 170px; translate: -50% -50%; rotate: -24deg; pointer-events: none; }
+.lb-gunrest svg { width: 100%; height: auto; filter: drop-shadow(0 10px 10px rgba(0,0,0,.6)); }
+.lb-log { position: absolute; z-index: 8; left: 16px; top: 4px; max-width: 230px; font-size: 13px; color: var(--muted); line-height: 1.6; pointer-events: none; }
+.lb-fly { position: fixed; left: 0; top: 0; z-index: 35; pointer-events: none; }
 
-/* 左輪（招牌主角）— 玩家自製圖 */
-.lb-revwrap { display: flex; justify-content: center; margin-top: 8px; }
-.lb-gun2 { position: relative; width: 108px; height: 110px; }
-.lb-gun2 img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
-  filter: drop-shadow(0 5px 9px rgba(0,0,0,.6)); transition: opacity .12s; }
-.lb-gun-fire { opacity: 0; }
-.lb-gun2.firing.hit .lb-gun-idle { opacity: 0; }
-.lb-gun2.firing.hit .lb-gun-fire { opacity: 1; animation: gunRecoil .55s .15s ease-out; filter: drop-shadow(0 5px 9px rgba(0,0,0,.6)) drop-shadow(0 0 22px rgba(255,180,90,.9)); }
-.lb-gun2.firing.blank .lb-gun-idle { animation: gunJerk .32s .1s ease-out; }
+/* 你的區 */
+.lb-dock { position: relative; z-index: 10; display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: end; padding: 0 18px calc(14px + env(safe-area-inset-bottom)); }
+.lb-me { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.lb-hand { display: flex; justify-content: center; align-items: flex-end; min-height: 120px; }
+.lb-hand .lb-card { --w: clamp(62px, 8vw, 92px); cursor: pointer; margin: 0 -6px; transform-origin: 50% 140%; }
+.lb-hand .lb-card:nth-child(1) { transform: rotate(-10deg); } .lb-hand .lb-card:nth-child(2) { transform: rotate(-5deg); }
+.lb-hand .lb-card:nth-child(4) { transform: rotate(5deg); } .lb-hand .lb-card:nth-child(5) { transform: rotate(10deg); }
+.lb-hand .lb-card.sel { translate: 0 -26px; box-shadow: 0 0 0 3px var(--accent), 0 14px 26px rgba(0,0,0,.6); }
+.lb-hand.locked .lb-card { cursor: default; }
+.lb-dead-note { color: var(--muted); font-size: 14px; align-self: center; }
+.lb-acts { display: flex; flex-direction: column; gap: 10px; min-width: 200px; }
+.lb-act { min-height: 54px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); font: 700 17px 'Noto Sans TC', sans-serif; transition: transform .1s, opacity .2s, box-shadow .2s; }
+.lb-act.play { background: var(--accent); color: var(--accent-ink); border: 0; }
+.lb-act.liar { background: var(--danger); color: #fff; border: 0; font-size: 20px; letter-spacing: .1em; }
+.lb-act:disabled { opacity: .3; cursor: default; }
+.lb-act:not(:disabled):active { transform: scale(.95); }
+.lb-act.hint:not(:disabled) { animation: lbHint 1.1s ease-in-out infinite; }
+@keyframes lbHint { 50% { box-shadow: 0 0 0 2px #fff, 0 0 24px var(--danger); } }
+.lb-tip { font-size: 13px; color: var(--muted); min-height: 18px; text-align: center; }
 
-/* 喊騙子! 印章 */
-.lb-callstamp { position: absolute; top: 46%; left: 50%; font-family: 'Rye', serif; font-size: 60px; color: var(--blood-2);
-  text-shadow: 0 2px 0 #000, 0 0 30px rgba(210,74,63,.8); animation: stamp 1.1s ease-out forwards; pointer-events: none; z-index: 5; }
+/* 喊騙子的印章 */
+.lb-stamp { position: absolute; z-index: 25; left: 50%; top: 42%; font: 900 clamp(48px, 9vw, 110px) 'Rye', 'Noto Sans TC', serif; color: var(--danger);
+  border: 6px solid var(--danger); padding: 0 24px; border-radius: 14px; opacity: 0; pointer-events: none; transform: translate(-50%,-50%) rotate(-10deg) scale(2.4); }
+.lb-stamp.show { animation: lbStamp 1.4s cubic-bezier(.2,1.5,.4,1) forwards; }
+@keyframes lbStamp { 0% { opacity: 0; transform: translate(-50%,-50%) rotate(-14deg) scale(2.4); } 18% { opacity: 1; transform: translate(-50%,-50%) rotate(-9deg) scale(1); }
+  80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-50%) rotate(-9deg) scale(1); } }
+.lb-app.shake { animation: lbShake .45s; }
+@keyframes lbShake { 20% { translate: -8px 4px; } 40% { translate: 7px -6px; } 60% { translate: -5px 5px; } 80% { translate: 3px -2px; } }
 
-/* 紀錄 */
-.lb-log { position: absolute; top: 64px; left: 14px; width: 220px; font-size: 13px; color: var(--dim);
-  background: rgba(0,0,0,.4); border: 1px solid rgba(232,162,60,.14); border-radius: 10px; padding: 10px 12px;
-  line-height: 1.65; max-height: 30vh; overflow: hidden; z-index: 4; }
+/* 俄羅斯輪盤演出 */
+.lb-rl { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(0,0,0,.8); opacity: 0; pointer-events: none; transition: opacity .35s; }
+.lb-rl.on { opacity: 1; pointer-events: auto; }
+.lb-rl-box { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.lb-rl-who { font: 900 26px 'Noto Sans TC', sans-serif; letter-spacing: .1em; text-align: center; }
+.lb-rl-who small { display: block; font: 500 14px 'Noto Sans TC', sans-serif; color: var(--muted); letter-spacing: 0; margin-top: 4px; }
+.lb-rl-cyl { width: min(300px, 60vw, 40vh); aspect-ratio: 1; }
+.lb-rl-cyl svg { width: 100%; height: 100%; overflow: visible; }
+.lb-rot { transform-origin: 0 0; transition: transform 2.2s cubic-bezier(.12,.75,.18,1); }
+.lb-rl-gun { width: min(420px, 78vw); }
+.lb-rl-gun svg { width: 100%; overflow: visible; }
+.lb-hammer { transform-origin: 74px 40px; transition: transform .18s; }
+.lb-hammer.cocked { transform: rotate(-28deg); }
+.lb-rl-msg { font: 900 clamp(30px, 6vw, 56px) 'Rye', 'Noto Sans TC', serif; letter-spacing: .1em; min-height: 1.2em; }
+.lb-rl-msg.click { color: var(--muted); }
+.lb-rl-msg.bang { color: var(--danger); text-shadow: 0 0 30px var(--danger); }
+.lb-flash { position: absolute; inset: 0; z-index: 50; pointer-events: none; opacity: 0; background: radial-gradient(circle, #fff 0%, #ffd27a 30%, rgba(200,20,20,.85) 70%); }
+.lb-flash.go { animation: lbFlash .9s ease-out; }
+@keyframes lbFlash { 0% { opacity: 1; } 15% { opacity: .9; } 100% { opacity: 0; } }
 
-/* 自己 */
-.lb-self { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 6;
-  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 16px;
-  background: rgba(20,13,8,.78); border: 1px solid rgba(232,162,60,.22); }
-.lb-self.active { border-color: var(--amber); box-shadow: 0 0 26px rgba(232,162,60,.4); }
-.lb-self.dead { opacity: .55; }
-.lb-self.shooting.hit { animation: seatHit .55s .15s ease-out; }
-.lb-selfbar { display: flex; align-items: center; gap: 14px; font-size: 15px; }
-.lb-hand { display: flex; gap: 10px; min-height: 92px; align-items: flex-end; }
-.lb-actions { display: flex; gap: 12px; }
-.tx-act:disabled { opacity: .4; cursor: not-allowed; transform: none; }
-.tx-act.danger { background: linear-gradient(180deg, var(--blood-2), var(--blood)); color: #fff; border: 0; }
-.lb-hint { font-size: 13px; color: var(--dim); min-height: 18px; }
-.lb-dead-note { color: var(--dim); font-size: 15px; padding: 20px; font-style: italic; }
-
-/* 震動（命中） */
-.lb-room.shake { animation: roomShake .45s .12s ease-in-out; }
-
-@keyframes lampSway { 0%,100% { transform: translateX(-50%) rotate(-1.2deg); } 50% { transform: translateX(-50%) rotate(1.2deg); } }
-@keyframes gunRecoil { 0% { transform: translateY(0) rotate(0); } 22% { transform: translateY(7px) rotate(-7deg); } 60% { transform: translateY(-2px) rotate(2deg); } 100% { transform: translateY(0) rotate(0); } }
-@keyframes gunJerk { 0%,100% { transform: translateY(0); } 35% { transform: translateY(5px) rotate(-3deg); } }
-@keyframes roomShake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-4px,2px); } 40% { transform: translate(3px,-3px); } 60% { transform: translate(-3px,2px); } 80% { transform: translate(2px,-1px); } }
-@keyframes stamp { 0% { opacity: 0; transform: translate(-50%,-50%) scale(2.6) rotate(-16deg); } 28% { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(-9deg); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1) rotate(-9deg); } }
-@keyframes flipIn { from { transform: rotateY(90deg); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes seatHit { 0%,100% { box-shadow: none; } 30% { box-shadow: 0 0 0 2px var(--blood-2), 0 0 34px rgba(210,74,63,.85); } }
-
-@media (max-width: 760px) {
-  .lb-seat { width: 120px; padding: 8px 8px 10px; }
-  .lb-seat.pos-l { left: 1%; } .lb-seat.pos-r { right: 1%; }
+/* 手機直向 */
+@media (orientation: portrait) {
+  .lb-top { padding-left: 132px; }
+  .lb-brand { font-size: 17px; }
+  .lb-info { display: none; }
+  .lb-stage::before { width: 94vw; height: 62%; }
+  .lb-seat[data-p="1"] { right: 2%; top: 24%; } .lb-seat[data-p="3"] { left: 2%; top: 24%; }
+  .lb-seat .lb-bub, .lb-seat[data-p="1"] .lb-bub { left: 50%; right: auto; top: auto; bottom: calc(100% + 4px); translate: -50% 0; }
+  .lb-center { top: 38%; } .lb-gunrest { display: none; } /* 直向放不下；開槍演出仍會出現左輪 */
+  .lb-seat[data-p="2"] { flex-direction: column; gap: 4px; } .lb-seat[data-p="2"] .lb-meta { align-items: center; }
+  .lb-log { display: none; top: 0; left: 8px; right: 8px; max-width: none; padding: 10px 12px; border-radius: 12px; background: rgba(12,8,4,.94); border: 1px solid var(--line); }
+  .lb-log.open { display: block; }
+  .lb-dock { grid-template-columns: auto 1fr; grid-template-areas: "me hand" "acts acts"; gap: 8px; padding: 0 10px calc(10px + env(safe-area-inset-bottom)); }
+  .lb-me { grid-area: me; } .lb-hand { grid-area: hand; min-height: 100px; }
+  .lb-acts { grid-area: acts; display: grid; grid-template-columns: 1.3fr 1fr; min-width: 0; }
+  .lb-tip { display: none; }
+  .lb-hand .lb-card { --w: clamp(50px, 14vw, 68px); }
 }
-@media (max-width: 520px) {
-  .lb-table::before { width: 94vw; height: 50vh; }
-  .lb-seat { width: 102px; padding: 6px; }
-  .lb-log { display: none; }
-  .lb-sign { display: none; } /* 窄螢幕放不下，裝飾性招牌省略 */
-  .lb-center { width: 86vw; }
-  .lb-tablecard { zoom: 1; }
-  .lb-self { bottom: 8px; padding: 8px 12px; }
+/* 橫向且不高：中央改左右排（桌牌｜牌堆＋宣稱） */
+@media (orientation: landscape) and (max-height: 640px) {
+  .lb-center { top: 22%; display: grid; grid-template-areas: "l l" "c p" "c m"; column-gap: 16px; row-gap: 2px; align-items: center; justify-items: start; }
+  .lb-tlabel { grid-area: l; justify-self: center; } .lb-tcard-wrap { grid-area: c; } .lb-pile { grid-area: p; height: 56px; }
+  .lb-claim { grid-area: m; text-align: left; max-width: 34vw; }
+  .lb-tcard { --w: 60px; }
+  .lb-gunrest { left: 27%; top: 76%; width: 140px; rotate: 18deg; }
+}
+/* 橫向但很矮（手機橫拿） */
+@media (orientation: landscape) and (max-height: 520px) {
+  .lb-top { min-height: 56px; padding-top: 6px; }
+  .lb-center { top: 34%; }
+  .lb-gunrest { display: none; }
+  .lb-hand { min-height: 90px; } .lb-hand .lb-card { --w: 58px; }
+  .lb-act { min-height: 46px; } .lb-tip { display: none; }
+  .lb-log { display: none; top: 0; padding: 10px 12px; border-radius: 12px; background: rgba(12,8,4,.94); border: 1px solid var(--line); }
+  .lb-log.open { display: block; }
+}
+/* 桌機以外不顯示紀錄按鈕時，紀錄常駐 */
+@media (orientation: landscape) and (min-height: 521px) { .lb-logbtn { display: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lb-root *, .lb-root *::before, .lb-root *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .lb-root .lb-stamp { display: none; } /* 不閃現大印章；「騙子！」氣泡已傳達 */
 }
