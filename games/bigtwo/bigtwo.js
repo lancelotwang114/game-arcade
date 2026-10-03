@@ -106,7 +106,7 @@ const BigTwo = {
     const s = this.st; s.handNo++;
     const deck = this.shuffle(this.makeDeck());
     s.players.forEach((p, i) => { p.hand = this.sortHand(deck.slice(i * 13, i * 13 + 13)); p.last = ''; });
-    s.table = null; s.passes = 0; s.winner = -1; s.phase = 'play';
+    s.table = null; s.trick = []; s.passes = 0; s.winner = -1; s.phase = 'play'; this._dealtAt = Date.now();
     s.first = s.lastWinner < 0;                                   // 第一局：梅花 3 開
     s.turn = s.first ? s.players.findIndex(p => p.hand.some(c => c.r === '3' && c.s === 'c')) : s.lastWinner;
     s.leader = s.turn;
@@ -126,6 +126,7 @@ const BigTwo = {
     if (!this.beats(t, s.table && s.table.t)) return false;
     p.hand = p.hand.filter(c => !cards.includes(c));
     s.table = { by: i, cards: this.sortHand([...cards]), t };
+    s.trick = (s.trick || []).concat([{ by: i, cards: s.table.cards, type: t.type }]); // 這一輪各家出過的牌（UI 顯示用）
     s.first = false; s.passes = 0; s.leader = i; p.last = this.TYPE_NAME[t.type];
     this.log(`${p.name} 出 ${this.TYPE_NAME[t.type]}：${cards.map(c => this.cardName(c)).join(' ')}`);
     if (!p.hand.length) { this._endHand(i); return true; }
@@ -135,10 +136,10 @@ const BigTwo = {
   pass(i) {
     const s = this.st;
     if (s.phase !== 'play' || s.turn !== i || !this.canPass()) return false;
-    s.players[i].last = '過'; s.passes++;
+    s.players[i].last = '過'; s.passes++; s.passSeq = (s.passSeq || 0) + 1; s.lastPassBy = i; // UI 依序號顯示「過」
     this.log(`${s.players[i].name} 過`);
     if (s.passes >= 3) {                                          // 其他三家都過：最後出牌者取得出牌權
-      s.table = null; s.passes = 0; s.turn = s.leader;
+      s.table = null; s.trick = []; s.passes = 0; s.turn = s.leader;
       s.players.forEach(p => { p.last = ''; });
       this.log(`${s.players[s.turn].name} 取得出牌權`);
       if (this.render) this.render(); this.tick(); return true;
@@ -158,7 +159,8 @@ const BigTwo = {
   },
   tick() {
     const s = this.st; if (!s || s.phase !== 'play') return;
-    if (s.players[s.turn].isAI) this._after(900 + Math.random() * 700, () => this.aiAct(s.turn));
+    // 發牌動畫期間電腦不出手
+    if (s.players[s.turn].isAI) this._after(Math.max(1100 + Math.random() * 700, (this._dealtAt || 0) + 3000 - Date.now()), () => this.aiAct(s.turn));
   },
 
   // ---------- AI ----------
@@ -228,3 +230,342 @@ if (typeof module !== 'undefined' && require.main === module) {
   console.log('✅ BigTwo 自測通過');
 }
 if (typeof module !== 'undefined') module.exports = BigTwo;
+
+// ---------- 平台註冊 + 連線（host 權威）+ UI ----------
+if (typeof Platform !== 'undefined') {
+  const B = BigTwo;
+  const SR_ = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], SS_ = ['s', 'h', 'd', 'c'];
+  const TYPES = ['single', 'pair', 'straight', 'flush', 'fullhouse', 'four', 'sflush'];
+  const key = c => c.r + c.s;
+  const known = c => !!(c && c.r);
+  const cardHTML = (c, cls = '', st = '') => known(c)
+    ? `<div class="b2-card ${cls}" data-k="${key(c)}" role="img" aria-label="${B.cardName(c)}" style="background-position:${SR_.indexOf(c.r) / 12 * 100}% ${SS_.indexOf(c.s) / 3 * 100}%;${st}"></div>`
+    : `<div class="b2-card back ${cls}" style="${st}"></div>`;
+  const ini = nm => { const ch = [...(nm || '?')]; const last = ch[ch.length - 1]; return /[一-鿿]/.test(last) ? last : ch[0].toUpperCase(); };
+  // 扇形：第 k 張（共 n 張）的旋轉角與下沉量
+  const fan = (k, n, step, drop) => { const m = (n - 1) / 2, d = k - m; return `rotate:${(d * step).toFixed(1)}deg;translate:0 ${(Math.abs(d) * drop).toFixed(1)}px`; };
+  const portrait = () => matchMedia('(orientation: portrait)').matches;
+
+  // ---------- 音效（CC0，來源見 games/bigtwo/audio/CREDITS.txt）----------
+  B.sfx = Platform.fx.sampler('games/bigtwo/audio/', {
+    shuffle: 'card-shuffle.wav', 'slide-1': 'card-slide-1.wav', 'slide-2': 'card-slide-2.wav', 'slide-3': 'card-slide-3.wav',
+    'place-1': 'card-place-1.wav', 'place-2': 'card-place-2.wav', 'place-3': 'card-place-3.wav', 'shove-1': 'card-shove-1.wav', 'shove-2': 'card-shove-2.wav',
+    'slam-1': 'slam-1.wav', 'slam-2': 'slam-2.wav', toast: 'toast-1.mp3',
+  });
+
+  // ---------- 連線：對賓客遮蔽他人手牌（結算時公開）----------
+  B._redact = function (seat) {
+    const s = this.st, open = s.phase === 'scored' || s.phase === 'over';
+    return JSON.parse(JSON.stringify({
+      players: s.players.map((p, i) => ({ id: p.id, name: p.name, isAI: p.isAI, score: p.score, last: p.last,
+        hand: (i === seat || open) ? p.hand : p.hand.map(() => ({ hidden: true })) })),
+      handNo: s.handNo, turn: s.turn, table: s.table, trick: s.trick || [], passes: s.passes, leader: s.leader, first: s.first,
+      phase: s.phase, log: s.log, winner: s.winner, lastWinner: s.lastWinner, lastResult: s.lastResult || null, passSeq: s.passSeq || 0, lastPassBy: s.lastPassBy,
+    }));
+  };
+  B._push = function () {
+    const O = this.O; if (!O || !O.isHost || !O.started) return;
+    for (const seat in O.peerOf) Platform.net.sendTo(O.peerOf[seat], 'state', { st: this._redact(+seat), seat: +seat });
+  };
+  B._newMatchOnline = function () {
+    const names = this.O.names;
+    this.st = { players: [0, 1, 2, 3].map(i => ({ id: i, name: names[i] || ['', 'AI甲', 'AI乙', 'AI丙'][i], isAI: !(i === 0 || names[i] != null), hand: [], score: 0, last: '' })),
+      handNo: 0, turn: 0, table: null, trick: [], passes: 0, leader: -1, first: true, phase: 'idle', log: [], winner: -1, lastWinner: -1 };
+    this._overShown = false;
+    this.newHand();
+  };
+  B._hostStart = function () {
+    this._clearTimers(); this._prev = null; this.O.started = true;
+    for (const seat in this.O.peerOf) Platform.net.sendTo(this.O.peerOf[seat], 'start', { seat: +seat });
+    this._newMatchOnline();
+  };
+  B._setupHostNet = function () {
+    Platform.net.on('_open', (d, from) => {
+      if (this.O.started) { Platform.net.sendTo(from, 'full', {}); return; }
+      let seat = -1; for (let i = 1; i < 4; i++) if (!this.O.peerOf[i]) { seat = i; break; }
+      if (seat < 0) { Platform.net.sendTo(from, 'full', {}); return; }
+      this.O.seatOf[from] = seat; this.O.peerOf[seat] = from; this.O.names[seat] = d.name || ('賓客' + seat);
+      Platform.net.sendTo(from, 'welcome', { seat }); Platform.net.broadcast('lobby', { names: this.O.names }); this._renderRoom();
+    });
+    Platform.net.on('_close', (d, from) => {
+      const seat = this.O.seatOf[from]; if (seat == null) return;
+      delete this.O.peerOf[seat]; delete this.O.seatOf[from]; this.O.names[seat] = null;
+      if (this.O.started && this.st && this.st.players[seat]) {
+        const p = this.st.players[seat]; p.isAI = true; this.log(`${p.name} 離線，改由電腦接手`);
+        if (this.st.turn === seat) this.tick(); this.render();
+      } else this._renderRoom();
+      Platform.net.broadcast('lobby', { names: this.O.names });
+    });
+    Platform.net.on('act', (d, from) => {
+      const seat = this.O.seatOf[from], s = this.st;
+      if (!d || seat == null || !s || s.turn !== seat || s.phase !== 'play') return;
+      if (d.kind === 'pass') { this.pass(seat); return; }
+      if (d.kind !== 'play' || !Array.isArray(d.cards) || d.cards.length < 1 || d.cards.length > 5) return;
+      const hand = s.players[seat].hand, pick = [];
+      for (const c of d.cards) { const h = hand.find(x => x.r === (c && c.r) && x.s === (c && c.s)); if (!h || pick.includes(h)) return; pick.push(h); } // 只接受自己手上、不重複的牌
+      this.play(seat, pick);
+    });
+  };
+  B._setupGuestNet = function () {
+    Platform.net.on('welcome', d => { this.O.mySeat = d.seat; this._renderRoom(); });
+    Platform.net.on('lobby', d => { this.O.names = d.names; this._renderRoom(); });
+    Platform.net.on('start', d => { if (d && d.seat != null) this.O.mySeat = d.seat; this.O.started = true; this._overShown = false; this._prev = null; if (this._overModal) { this._overModal.close(); this._overModal = null; } });
+    Platform.net.on('state', d => { this.st = d.st; this.O.mySeat = d.seat; this.O.started = true; this.render(); });
+    Platform.net.on('full', () => { Platform.toast('房間已滿或已開始'); Platform.exit(); });
+    Platform.net.on('_close', () => { if (!this._root) return; Platform.toast('房主已離線'); Platform.exit(); });
+  };
+  B._startOnline = function (opts) {
+    const name = Platform.store.get('arcade_name', '') || (opts.join ? '賓客' : '房主');
+    this.O = { isHost: !opts.join, mySeat: opts.join ? -1 : 0, seatOf: {}, peerOf: {}, names: [null, null, null, null], started: false };
+    this._renderRoom();
+    Platform.net.init(name).then(() => {
+      if (this.O.isHost) { Platform.net.createRoom(); this.O.names[0] = name; this._setupHostNet(); this._renderRoom(); }
+      else { this._setupGuestNet(); Platform.net.joinRoom(opts.join.host); this._renderRoom(); }
+    }).catch(e => { Platform.toast('連線失敗：' + (e.message || e)); Platform.exit(); });
+  };
+  B._renderRoom = function () { if (!this._root || !this.O || this.O.started) return; Platform.net.renderRoom(this._root, this.O, '🂡 大老二', () => this._hostStart()); };
+  B.restart = function () { this._clearTimers(); this._overShown = false; this._prev = null; if (this.O && this.O.isHost) { this._hostStart(); return; } this.newMatch(this._human || '你'); };
+
+  // ---------- 骨架 ----------
+  B._skin = function () { const r = this._root.style, abs = u => new URL(u, document.baseURI).href;
+    r.setProperty('--b2-sheet', `url('${abs(Platform.cards.SHEET)}')`); r.setProperty('--b2-back', `url('${abs(Platform.cards.BACK)}')`); };
+  B._build = function () {
+    const root = this._root;
+    const seat = p => `<div class="b2-seat" data-p="${p}"><div class="b2-pod"><div class="b2-ava"><span class="b2-ini"></span></div>
+      <div><div class="b2-nm"></div><div class="b2-cnt"><b>0</b> 張</div><div class="b2-score"></div></div><div class="b2-fanback"></div></div><span class="b2-bub"></span></div>`;
+    root.innerHTML = `<div class="b2-app">
+      <header class="b2-top">
+        <div class="b2-brand">大老二</div>
+        <div class="b2-info">第 <b class="b2-hno">1</b> 局<span class="b2-target"> · 先到 ${B.TARGET} 分者輸</span></div>
+        <button class="b2-ibtn b2-snd" aria-label="音效開關"></button>
+        <button class="b2-ibtn b2-style" aria-label="牌面風格">🎴</button>
+        <button class="b2-ibtn b2-logbtn" aria-label="牌局紀錄">☰</button>
+      </header>
+      <main class="b2-wrap"><div class="b2-table">
+        ${seat(1)}${seat(2)}${seat(3)}
+        ${[0, 1, 2, 3].map(p => `<div class="b2-spot" data-p="${p}"></div>`).join('')}
+        <div class="b2-center"><div class="b2-type"></div><div class="b2-status" aria-live="polite"></div></div>
+        <div class="b2-deck"></div>
+      </div></main>
+      <section class="b2-dock" aria-label="你的手牌與行動">
+        <div class="b2-me"><div class="b2-ava"><span class="b2-ini"></span></div><div><div class="b2-nm"></div><div class="b2-score"></div></div><span class="b2-bub"></span></div>
+        <div class="b2-mid">
+          <div class="b2-tip" aria-live="polite"></div>
+          <div class="b2-chips" role="group" aria-label="牌型快捷">${TYPES.map(t => `<button class="b2-chip" data-t="${t}" disabled>${B.TYPE_NAME[t]}<b></b></button>`).join('')}</div>
+          <div class="b2-hand"></div>
+        </div>
+        <div class="b2-acts"><button class="b2-act b2-sort" aria-label="排序方式">點數排序</button><button class="b2-act b2-pass" disabled>過</button><button class="b2-act primary b2-play" disabled>出牌</button></div>
+      </section>
+      <div class="b2-result" aria-live="polite"><div class="b2-rbox"></div></div>
+      <aside class="b2-log" aria-label="牌局紀錄"><h2>牌局紀錄 <button class="b2-ibtn b2-logx" aria-label="關閉">✕</button></h2><ul></ul></aside>
+    </div>`;
+    const q = s => root.querySelector(s);
+    const U = this._ui = {
+      app: q('.b2-app'), hno: q('.b2-hno'), status: q('.b2-status'), type: q('.b2-type'), deck: q('.b2-deck'),
+      seat: [q('.b2-me'), ...[1, 2, 3].map(p => q(`.b2-seat[data-p="${p}"]`))], spot: [0, 1, 2, 3].map(p => q(`.b2-spot[data-p="${p}"]`)),
+      hand: q('.b2-hand'), tip: q('.b2-tip'), chips: [...root.querySelectorAll('.b2-chip')], play: q('.b2-play'), pass: q('.b2-pass'), sort: q('.b2-sort'),
+      result: q('.b2-result'), rbox: q('.b2-rbox'), snd: q('.b2-snd'), log: q('.b2-log'), logList: q('.b2-log ul'),
+    };
+    U.ava = U.seat.map(e => e.querySelector('.b2-ava')); U.bub = U.seat.map(e => e.querySelector('.b2-bub'));
+    this._prev = null; this._sel = new Set(); this._sortBy = 'rank'; this._cyc = {};
+    const sndIcon = () => { U.snd.textContent = Platform.audio.enabled ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(Platform.audio.enabled)); };
+    sndIcon(); U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); };
+    q('.b2-logbtn').onclick = () => U.log.classList.add('open'); q('.b2-logx').onclick = () => U.log.classList.remove('open');
+    q('.b2-style').onclick = () => Platform.ui.modal({ title: '選擇牌面風格', html: '即時切換（會記住）',
+      buttons: Object.keys(Platform.cards.STYLE_NAMES).map(k => ({ label: Platform.cards.STYLE_NAMES[k] + (Platform.cards.style === k ? ' ✓' : ''), primary: Platform.cards.style === k,
+        onClick: c => { c(); Platform.cards.setStyle(k); this._skin(); } })) });
+    U.sort.onclick = () => { this._sortBy = this._sortBy === 'rank' ? 'suit' : 'rank'; U.sort.textContent = this._sortBy === 'rank' ? '點數排序' : '花色排序'; this._paintHand(false); };
+    this._skin();
+  };
+
+  // ---------- 手牌（自己）----------
+  B._myHand = function () {
+    const h = [...this.st.players[this._me].hand].filter(known);
+    return this._sortBy === 'rank' ? B.sortHand(h) : h.sort((a, b) => SS_.indexOf(a.s) - SS_.indexOf(b.s) || B.cv(a) - B.cv(b));
+  };
+  B._paintHand = function (deal, dealDelay = []) {
+    const U = this._ui, h = this._myHand(), rows = portrait() && h.length > 7 ? [h.slice(0, 7), h.slice(7)] : [h];
+    let idx = 0;
+    U.hand.innerHTML = rows.map(row => `<div class="b2-row">${row.map((c, k) => {
+      const d = deal ? `--d:${dealDelay[idx] || 0}ms;` : ''; idx++;
+      return cardHTML(c, (this._sel.has(key(c)) ? 'sel ' : '') + (deal ? 'deal' : ''), d + (rows.length === 1 ? fan(k, row.length, 2.2, 1.1) : ''));
+    }).join('')}</div>`).join('');
+    U.hand.querySelectorAll('.b2-card').forEach(el => {
+      el.setAttribute('role', 'button'); el.tabIndex = 0;
+      const toggle = () => { const k = el.dataset.k; this._sel.has(k) ? this._sel.delete(k) : this._sel.add(k); this._cyc = {}; this.sfx.play('slide', { gain: .22, rate: 1.4 }); this._paintSel(); };
+      el.onclick = toggle; el.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } };
+    });
+    this._paintSel();
+  };
+  // 選取外觀 + 出牌按鈕 + 提示文字 + 牌型快捷
+  B._paintSel = function () {
+    const U = this._ui, s = this.st, me = this._me, mine = s.players[me];
+    const myTurn = s.phase === 'play' && s.turn === me;
+    const hand = mine.hand.filter(known), cards = hand.filter(c => this._sel.has(key(c)));
+    U.hand.querySelectorAll('.b2-card').forEach(el => { const on = this._sel.has(el.dataset.k); el.classList.toggle('sel', on); el.setAttribute('aria-pressed', String(on)); });
+    const t = cards.length ? B.classify(cards) : null;
+    const must = myTurn && s.first ? hand.find(c => c.r === '3' && c.s === 'c') : null;
+    const ok = myTurn && t && B.beats(t, s.table && s.table.t) && (!must || cards.includes(must));
+    U.play.disabled = !ok; U.play.textContent = ok ? `出 ${B.TYPE_NAME[t.type]}` : '出牌';
+    U.pass.disabled = !(myTurn && s.table);
+    U.tip.className = 'b2-tip' + (cards.length && !ok ? ' bad' : '');
+    U.tip.textContent = !cards.length ? (myTurn ? (s.table ? `要壓過 ${s.players[s.table.by].name} 的${B.TYPE_NAME[s.table.t.type]}` : must ? '第一手要含梅花 3' : '你有出牌權，出什麼都可以') : '')
+      : !t ? '這幾張不是合法牌型' : !myTurn ? `已選：${B.TYPE_NAME[t.type]}` : ok ? '' : must && !cards.includes(must) ? '第一手要含梅花 3' : `${B.TYPE_NAME[t.type]}壓不過桌上的牌`;
+    // 牌型快捷：輪到自己時列「壓得過的」，否則列手上有的
+    const pool = myTurn ? B.legalPlays(hand, s.table, must) : B.combos(hand);
+    const by = {}; pool.forEach(cs => { const tp = B.classify(cs).type; (by[tp] = by[tp] || []).push(cs); });
+    this._chipPool = by;
+    U.chips.forEach(ch => { const n = (by[ch.dataset.t] || []).length; ch.querySelector('b').textContent = n ? n : '';
+      ch.disabled = !n || !myTurn; ch.classList.toggle('on', !!(t && t.type === ch.dataset.t)); });
+  };
+  // 點牌型快捷：由小到大循環選一組
+  B._pickType = function (tp) {
+    const list = (this._chipPool[tp] || []).slice().sort((a, b) => B._cmpKey(B.classify(a).key, B.classify(b).key));
+    if (!list.length) return;
+    const i = this._cyc[tp] = ((this._cyc[tp] ?? -1) + 1) % list.length;
+    this._sel = new Set(list[i].map(key)); this.sfx.play('slide', { gain: .25, rate: 1.3 }); this._paintSel();
+    const cyc = this._cyc[tp]; this._cyc = { [tp]: cyc };
+  };
+
+  // ---------- 結算面板 ----------
+  B._showResult = function () {
+    const U = this._ui, s = this.st, w = s.winner, res = s.lastResult || [];
+    U.rbox.innerHTML = '';
+    const h = document.createElement('h2'); h.textContent = `${s.players[w].name} 出完了！`; U.rbox.append(h);
+    s.players.forEach((p, i) => {
+      const row = document.createElement('div'); row.className = 'b2-rrow' + (i === w ? ' win' : '');
+      const nm = document.createElement('div'); nm.className = 'b2-rname'; nm.textContent = p.name + (i === w ? ' 🏆' : '');
+      const cs = document.createElement('div'); cs.className = 'b2-rcards'; cs.innerHTML = p.hand.filter(known).map(c => cardHTML(c)).join('');
+      const pen = document.createElement('b'); pen.textContent = i === w ? '' : `−${res[i]}`;
+      const tot = document.createElement('span'); tot.textContent = `累計 ${p.score}`;
+      row.append(nm, cs, pen, tot); U.rbox.append(row);
+    });
+    U.result.classList.add('on'); this.sfx.play('toast', { gain: .5 });
+  };
+
+  // ---------- 主渲染：依前後狀態差異觸發動畫 ----------
+  B.render = function () {
+    const root = this._root; if (!root) return;
+    const O = this.O;
+    if (O && !O.started) { this._renderRoom(); return; }
+    const s = this.st; if (!s) return;
+    if (!root.querySelector('.b2-app')) this._build();
+    const U = this._ui, me = this._me = O ? O.mySeat : 0, pl = s.players, N = 4, pos = i => (i - me + N) % N, tl = this._tl;
+    const P = this._prev, newHand = !P || P.hand !== s.handNo, trick = s.trick || [];
+    U.hno.textContent = s.handNo;
+    // 座位：名字、張數、分數、對手手牌扇形
+    pl.forEach((p, i) => {
+      const k = pos(i), el = U.seat[k];
+      el.querySelector('.b2-ini').textContent = ini(p.name); el.querySelector('.b2-nm').textContent = p.name;
+      el.querySelector('.b2-score').textContent = `${p.score} 分`;
+      if (k) {
+        const n = p.hand.length, c = el.querySelector('.b2-cnt'); c.querySelector('b').textContent = n; c.classList.toggle('low', n > 0 && n <= 3);
+        const fb = el.querySelector('.b2-fanback');
+        if (fb.childElementCount !== n || newHand) fb.innerHTML = Array.from({ length: n }, (_, j) => `<i style="${fan(j, n, 5, .6)}${newHand ? `;--d:${600 + j * 4 * 40 + k * 40}ms` : ''}" class="${newHand ? 'deal' : ''}"></i>`).join('');
+      }
+      el.classList.toggle('turn', s.phase === 'play' && s.turn === i);
+    });
+
+    if (newHand) {
+      tl.clear(); this._sel = new Set(); this._cyc = {};
+      U.spot.forEach(sp => { sp.innerHTML = ''; sp.className = 'b2-spot'; }); U.type.textContent = ''; U.result.classList.remove('on');
+      U.bub.forEach(b => { b.className = 'b2-bub'; });
+      this.sfx.play('shuffle', { gain: .6 });
+      const delays = []; for (let r = 0; r < 13; r++) for (let k = 0; k < 4; k++) {
+        const d = 600 + (r * 4 + k) * 40;
+        if (k === 0) delays.push(d + 260);
+        if (r % 3 === 0) { tl.fly(U.deck, k ? U.ava[k] : U.hand, cardHTML(null, '', '--w:40px'), 260, d); this.sfx.play('slide', { gain: .3, when: d / 1000 }); }
+      }
+      this._paintHand(true, delays);
+    } else {
+      // 有人出牌：這一輪的出牌紀錄變長
+      if (trick.length > P.trickLen) {
+        const e = trick[trick.length - 1], k = pos(e.by), bomb = B.isBomb({ type: e.type });
+        U.spot.forEach(sp => sp.classList.remove('lead'));
+        const sp = U.spot[k]; sp.className = 'b2-spot lead';
+        sp.innerHTML = e.cards.map((c, j) => cardHTML(c, 'in', `--d:${240 + j * 50}ms;${fan(j, e.cards.length, 5, 1.2)}`)).join('');
+        U.spot.forEach((o, j) => { if (j !== k && o.childElementCount) o.classList.add('old'); });
+        e.cards.forEach((c, j) => tl.fly(k ? U.ava[k] : U.hand, sp, cardHTML(c, '', '--w:46px'), 280, j * 50, [-12, 0]));
+        if (bomb) { this.sfx.play('slam', { gain: 1, when: .2 }); tl.after(() => Platform.fx.restart(U.app, 'shake'), 220); }
+        else this.sfx.play('place', { gain: .8, when: .22 });
+        U.type.textContent = B.TYPE_NAME[e.type]; Platform.fx.restart(U.type, 'pop');
+        if (k) this._say(k, B.TYPE_NAME[e.type], 'type');
+        if (!k || e.by === me) this._sel = new Set();
+      }
+      // 一輪結束：桌上牌收走
+      if (trick.length === 0 && P.trickLen > 0) {
+        // 只收走「此刻」桌上的牌；之後若有人立刻出新牌，不會被一起清掉
+        const gone = U.spot.map(sp => { if (sp.childElementCount) { tl.fly(sp, U.deck, cardHTML(null, '', '--w:40px'), 380, 0); sp.classList.add('clear'); } return [...sp.children]; });
+        tl.after(() => U.spot.forEach((sp, j) => { gone[j].forEach(n => n.remove()); if (!sp.childElementCount) sp.className = 'b2-spot'; }), 360);
+        U.type.textContent = ''; this.sfx.play('shove', { gain: .5 });
+        U.bub.forEach(b => { b.className = 'b2-bub'; });
+      }
+      // 過
+      if ((s.passSeq || 0) > (P.passSeq || 0) && s.lastPassBy != null) { const k = pos(s.lastPassBy); if (k) this._say(k, '過'); this.sfx.play('slide', { gain: .18, rate: .8 }); }
+      // 結算
+      if (s.phase === 'scored' && P.phase !== 'scored') {
+        U.spot.forEach(o => o.classList.add('old'));
+        tl.after(() => this._showResult(), 1100);
+      }
+    }
+    // 自己手牌：張數變了（出牌或連線新狀態）才重繪
+    const myN = pl[me].hand.length;
+    if (!newHand && (!P || P.myN !== myN || P.phase !== s.phase)) this._paintHand(false);
+    else this._paintSel();
+    // 中央狀態
+    U.status.textContent = s.phase !== 'play' ? '' : !s.table ? `${pl[s.turn].name} 有出牌權${s.first ? '（第一手須含梅花 3）' : ''}`
+      : `${pl[s.table.by].name} 的${B.TYPE_NAME[s.table.t.type]} · 輪到 ${pl[s.turn].name}`;
+    U.app.classList.toggle('myturn', s.phase === 'play' && s.turn === me);
+    if (s.phase === 'play' && s.turn === me && (!P || P.turn !== s.turn || newHand)) Platform.audio._tone(880, .25, 'sine', .1, newHand ? 3 : 0);
+    // 紀錄（純文字）
+    U.logList.replaceChildren(...s.log.map(l => { const li = document.createElement('li'); li.textContent = l; return li; }));
+    // 整場結束
+    if (s.phase === 'over' && !this._overShown) {
+      this._overShown = true;
+      const best = pl.reduce((a, b) => b.score < a.score ? b : a), iWin = best.id === me;
+      Platform.audio && (iWin ? Platform.audio.win() : Platform.audio.lose());
+      const isGuest = O && !O.isHost;
+      this._overModal = Platform.ui.modal({ title: iWin ? '🏆 你是最低分！' : '遊戲結束',
+        html: `最低分：<b>${best.name.replace(/[<>&"']/g, '')}</b>（${best.score} 分）`,
+        buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.exit(); } }]
+          : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.exit(); } }] });
+    }
+    this._prev = { hand: s.handNo, trickLen: trick.length, passSeq: s.passSeq || 0, myN, phase: s.phase, turn: s.turn };
+    this._push();
+  };
+  B._say = function (k, t, cls = '') { const b = this._ui.bub[k]; b.textContent = t; b.className = 'b2-bub ' + cls; Platform.fx.restart(b, 'pop'); };
+
+  // 送出動作：房主直接套用；賓客送給房主驗證
+  B._send = function (kind, cards) {
+    const isHost = !this.O || this.O.isHost, me = this._me;
+    this._sel = new Set(); this._cyc = {};
+    if (kind === 'pass') { if (isHost) this.pass(me); else Platform.net.sendHost('act', { kind: 'pass' }); return; }
+    if (isHost) { const hand = this.st.players[me].hand; this.play(me, cards.map(c => hand.find(h => key(h) === key(c)))); }
+    else Platform.net.sendHost('act', { kind: 'play', cards: cards.map(c => ({ r: c.r, s: c.s })) });
+  };
+
+  Platform.register({
+    id: 'bigtwo', name: '大老二', icon: '🂡',
+    desc: '台灣大老二：對子、順子、葫蘆、鐵支炸彈', players: { min: 2, max: 4 },
+    online: true,
+    mount(stage, opts) {
+      const root = document.createElement('div'); root.id = 'b2-root'; root.className = 'b2-root'; stage.appendChild(root);
+      B._root = root; B._human = '你'; B._prev = null; B._overShown = false; B._tl = Platform.fx.timeline(root);
+      B.sfx.unlock(); B.sfx.load();
+      root.addEventListener('pointerdown', () => B.sfx.unlock(), { passive: true });
+      root.addEventListener('click', e => {
+        const U = B._ui; if (!U) return;
+        const chip = e.target.closest('.b2-chip'); if (chip && !chip.disabled) { B._pickType(chip.dataset.t); return; }
+        if (e.target === U.play && !U.play.disabled) { const hand = B.st.players[B._me].hand.filter(known); B._send('play', hand.filter(c => B._sel.has(key(c)))); return; }
+        if (e.target === U.pass && !U.pass.disabled) B._send('pass');
+      });
+      B._mq = matchMedia('(orientation: portrait)'); B._onMq = () => { if (B._ui && B.st) B._paintHand(false); }; B._mq.addEventListener('change', B._onMq);
+      if (opts && opts.online) B._startOnline(opts); else { B.O = null; B.newMatch('你'); }
+    },
+    unmount() {
+      B._clearTimers(); if (B._tl) B._tl.clear(); if (B._mq) B._mq.removeEventListener('change', B._onMq);
+      if (B._overModal) { B._overModal.close(); B._overModal = null; }
+      B._root = null; B._ui = null; B.st = null; B.O = null; B._overShown = false;
+    },
+  });
+}

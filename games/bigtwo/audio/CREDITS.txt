@@ -1,0 +1,8 @@
+大老二音效來源（皆為 CC0 公眾領域，可商用、不需標示；仍列出以示感謝）
+
+Kenney — https://kenney.nl （CC0）
+  card-shuffle / card-slide-1..3 / card-place-1..3 / card-shove-1..2.wav   Casino Audio
+  slam-1..2.wav   Impact Sounds：impactWood_heavy（轉 WAV）
+
+BigSoundBank — https://bigsoundbank.com （CC0）
+  toast-1.mp3     #1335 Cheers, Champagne Flute #1
