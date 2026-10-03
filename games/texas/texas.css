@@ -237,7 +237,7 @@
   .tx-me { grid-area: me; justify-self: start; padding: 6px 12px 6px 6px; gap: 8px; }
   .tx-me .tx-ava { width: 42px; }
   .tx-me .tx-st { font-size: 20px; }
-  .tx-held { grid-area: held; min-width: 0; margin-top: calc(var(--hw) * -.9); padding-right: 6px; }
+  .tx-held { grid-area: held; min-width: 0; margin-top: calc(var(--hw) * -.9); padding-right: calc(var(--hw) * .22); } /* 右牌旋轉後不出界 */
   .tx-ctrl { grid-area: ctrl; width: 100%; }
   .tx-wait { text-align: center; }
 }
