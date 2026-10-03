@@ -733,11 +733,18 @@ body::before {
 .mt-combo.clickable:hover { background:rgba(212,168,67,.15); }
 
 /* hand-bar（聽牌信息欄） */
-#hand-bar { position:absolute; left:50%; bottom:110px; transform:translateX(-50%);
+/* 原本 bottom:110 置中 → 剛好壓在 3D 手牌中間；改放底部名牌右側空白（避開「輪到你」標籤），並乘 HUD 縮放補償 */
+#hand-bar { position:absolute; left:calc(50% + 380px*min(var(--hudk,1),1.6)); bottom:12px; /* 380：讓開摸進來的牌 */
+            transform:scale(min(var(--hudk,1),1.6)); transform-origin:left bottom;
             display:none; align-items:center; gap:8px;
             background:rgba(16,9,5,.85); border:1px solid #5c4419; border-radius:8px;
             padding:5px 14px; font-size:12px; color:#d8c89a; pointer-events:none; }
 #hand-bar.show { display:flex; }
+#hand-bar .hb-tiles { display:flex; gap:6px; }
+#hand-bar .hb-tile-entry { display:flex; flex-direction:column; align-items:center; gap:1px; }
+#hand-bar .hb-cnt { font-size:11px; font-weight:700; color:#2ecc71; }
+#hand-bar .hb-cnt.lo { color:#e67e22; }
+#hand-bar .hb-cnt.z { color:#e74c3c; }
 
 /* Toast */
 #toast { position:absolute; bottom:130px; left:50%; transform:translateX(-50%);
@@ -867,78 +874,73 @@ body::before {
 #hud-center-pill.t-turn::after { content:attr(data-sec); font:900 36px/1 'Noto Serif TC',serif; color:var(--tc); }
 #hud-center-pill.t-urg { animation:tUrg .5s ease-in-out infinite alternate; }
 
-/* ── 3D 版聊天面板（移到左下） ── */
+/* ── 3D 版聊天面板（移到左下） ──
+   HUD 為 1920 設計稿整體縮小 → 尺寸與字級乘 --hudk 補償（同玩家面板），1280 寬實際字級約 14px；高度不超過畫面 */
 #chat-panel {
-  position:absolute; left:20px; bottom:80px;
-  width:260px; height:340px;
-  background:rgba(6,16,10,.94); border:1.5px solid rgba(93,173,226,.35);
-  border-radius:10px; display:none; flex-direction:column; z-index:250;
+  --ck:var(--hudk,1);
+  /* 浮在手牌上方（bottom 270）、上緣不碰左家資訊卡（max-height 留 540，手機資訊卡會下移避讓手牌）；HUD 為固定 1920×1080 座標，各螢幕比例一致 */
+  position:absolute; left:20px; bottom:270px;
+  width:calc(300px*var(--ck)); height:calc(340px*var(--ck)); max-height:calc(100% - 540px);
+  background:rgba(6,16,10,.95); border:1.5px solid rgba(93,173,226,.4);
+  border-radius:12px; display:none; flex-direction:column; z-index:250;
   pointer-events:auto; overflow:hidden;
   box-shadow:0 4px 24px rgba(0,0,0,.7);
   backdrop-filter:blur(4px);
+  font-size:calc(16px*var(--ck));
 }
 #chat-panel.open { display:flex; }
 #chat-header {
-  padding:7px 12px; font-size:13px; font-weight:700;
+  padding:.5em .9em; font-size:1.05em; font-weight:700;
   color:rgba(93,173,226,.95); border-bottom:1px solid rgba(93,173,226,.22);
   display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
   letter-spacing:1px;
 }
 .chat-close {
-  background:none; border:none; color:rgba(255,255,255,.45); cursor:pointer;
-  font-size:18px; line-height:1; padding:0 4px;
+  background:none; border:none; color:rgba(255,255,255,.55); cursor:pointer;
+  font-size:1.5em; line-height:1; padding:0 .2em;
 }
 .chat-close:hover { color:#fff; }
 #chat-msgs {
-  flex:1; overflow-y:auto; padding:7px 10px; display:flex; flex-direction:column; gap:5px;
+  flex:1; overflow-y:auto; padding:.5em .75em; display:flex; flex-direction:column; gap:.35em;
 }
 #chat-msgs::-webkit-scrollbar { width:5px; }
 #chat-msgs::-webkit-scrollbar-thumb { background:rgba(93,173,226,.3); border-radius:3px; }
-.chat-msg { font-size:12px; line-height:1.5; word-break:break-all; }
+.chat-msg { font-size:1em; line-height:1.5; word-break:break-all; }
 .chat-msg .cm-from { font-weight:700; margin-right:4px; }
 .chat-msg.cm-self .cm-from { color:rgba(212,168,67,.95); }
 .chat-msg.cm-ai   .cm-from { color:rgba(93,173,226,.9); }
-.chat-msg.cm-sys  { color:rgba(255,255,255,.32); font-style:italic; font-size:11px; }
-.chat-msg .cm-txt { color:rgba(245,236,215,.88); }
+.chat-msg.cm-sys  { color:rgba(255,255,255,.45); font-style:italic; font-size:.85em; }
+.chat-msg .cm-txt { color:rgba(245,236,215,.92); }
+/* 快捷喊話：4×2 按鈕，點了送出並念出 */
+#chat-phrases {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:.35em; padding:.5em .6em;
+  border-top:1px solid rgba(93,173,226,.16); flex-shrink:0;
+}
+#chat-phrases button {
+  background:rgba(212,168,67,.12); border:1px solid rgba(212,168,67,.4); color:#f0d38a;
+  border-radius:.45em; padding:.4em .1em; font:600 .85em 'Noto Sans TC',sans-serif;
+  cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+#chat-phrases button:hover { background:rgba(212,168,67,.28); }
+#chat-phrases button:active { transform:scale(.95); }
 #chat-input-row {
-  padding:7px 8px; display:flex; gap:5px;
+  padding:.5em .6em; display:flex; gap:.35em;
   border-top:1px solid rgba(93,173,226,.16); flex-shrink:0;
 }
 #chat-input {
   flex:1; background:rgba(255,255,255,.08); border:1px solid rgba(93,173,226,.35);
-  border-radius:5px; color:#f5ecd7; font-size:12px; padding:5px 8px; outline:none;
+  border-radius:.4em; color:#f5ecd7; font-size:1em; padding:.4em .6em; outline:none;
   min-width:0;
 }
 #chat-input:focus { border-color:rgba(93,173,226,.65); }
-#chat-send {
+#chat-send, #chat-shout {
   background:rgba(93,173,226,.2); border:1px solid rgba(93,173,226,.45);
-  color:rgba(93,173,226,.95); border-radius:5px; font-size:12px; cursor:pointer;
-  padding:4px 11px; flex-shrink:0; font-weight:700;
+  color:rgba(93,173,226,.95); border-radius:.4em; font-size:.95em; cursor:pointer;
+  padding:.3em .75em; flex-shrink:0; font-weight:700;
 }
 #chat-send:hover { background:rgba(93,173,226,.35); }
-/* 語音輸入 toggle 按鈕 */
-#chat-voice-btn {
-  background:transparent; border:1px solid rgba(255,255,255,.18);
-  color:rgba(255,255,255,.55); border-radius:5px; cursor:pointer;
-  padding:3px 8px; flex-shrink:0; font-size:13px;
-}
-#chat-voice-btn:hover { color:rgba(93,173,226,.95); border-color:rgba(93,173,226,.5); }
-/* 語音輸入區（隱藏狀態，按麥克風才切出來） */
-#chat-voice-row {
-  display:none; gap:5px; padding:7px 8px;
-  border-top:1px solid rgba(93,173,226,.16); flex-shrink:0;
-}
-#chat-voice-row.show { display:flex; }
-#chat-voice-row input {
-  flex:1; background:rgba(255,255,255,.08); border:1px solid rgba(212,168,67,.45);
-  border-radius:5px; color:#f5cc6a; font-size:13px; padding:5px 8px; outline:none;
-  font-family:'Noto Serif TC',serif; letter-spacing:3px; text-align:center;
-}
-#chat-voice-row button {
-  background:rgba(212,168,67,.18); border:1px solid rgba(212,168,67,.4);
-  color:#d4a843; border-radius:5px; cursor:pointer; padding:4px 8px; flex-shrink:0; font-size:13px;
-}
-#chat-voice-row button:hover { background:rgba(212,168,67,.32); }
+#chat-shout { background:rgba(212,168,67,.18); border-color:rgba(212,168,67,.45); padding:.3em .55em; }
+#chat-shout:hover { background:rgba(212,168,67,.32); }
 /* 未讀小紅點 */
 #hud-chat-btn.has-unread::after {
   content:''; position:absolute; top:4px; right:4px;
@@ -1523,19 +1525,14 @@ body.in-lobby .hud { visibility:hidden; }
       <button class="chat-close" onclick="Game.toggleChat?.()">×</button>
     </div>
     <div id="chat-msgs"></div>
-    <!-- 一般文字輸入 -->
+    <!-- 快捷喊話：點一下送出並念出（預錄語音，見 tools/gen_voice.py PHRASES） -->
+    <div id="chat-phrases"></div>
+    <!-- 文字輸入：送出＝只送文字；📢＝念出來（6 字內） -->
     <div id="chat-input-row">
-      <input id="chat-input" placeholder="說點什麼…" maxlength="60"
+      <input id="chat-input" placeholder="輸入訊息，Enter 送出" maxlength="60"
         onkeydown="if(event.key==='Enter')Game.sendChat?.()">
-      <button id="chat-voice-btn" onclick="Game.toggleVoiceInput?.()" title="切換語音輸入">🎤</button>
       <button id="chat-send" onclick="Game.sendChat?.()">送出</button>
-    </div>
-    <!-- 語音輸入(限 3 字,送出後 TTS 念出) -->
-    <div id="chat-voice-row">
-      <input id="chat-voice-input" placeholder="3 字內(會念出)" maxlength="3"
-        onkeydown="if(event.key==='Enter')Game.sendVoiceChat?.();else if(event.key==='Escape')Game.toggleVoiceInput?.()">
-      <button onclick="Game.sendVoiceChat?.()" title="送出並念出">📢</button>
-      <button onclick="Game.toggleVoiceInput?.()" title="返回文字">✕</button>
+      <button id="chat-shout" onclick="Game.sendVoiceChat?.()" title="念出來（6 字內）">📢</button>
     </div>
   </div>
 
@@ -2581,6 +2578,7 @@ const Groups = {
 };
 // 每次 render3D 後 p0 手牌 mesh 陣列（供 raycast 用）
 let _p0HandMeshes = [];  // [{mesh, tileId, tile}]
+let _lastPtrType = 'mouse'; // 最後一次指標類型（觸控時聽牌選牌改兩段式點擊）
 // v1.7.x: 候選/摸牌浮動動畫清單，tick() 每幀做 ease-in 升起 + sine 上下浮動
 let _floatTiles = [];
 // 開局儀式（砌牌→擲骰→發牌→補花）期間的顯示覆寫；null = 正常顯示 Game.st
@@ -3258,6 +3256,20 @@ function render3D() {
 // 左右家面板避讓：開局 16 張時側家手牌欄很長，固定位置的面板會蓋住最遠端幾張；
 // 每次重繪後量手牌最上緣，把面板推到其上方（不超過工具列／暫停鈕／角落副露），無空間時停在上限。
 // 用 camera.matrixWorld 反矩陣自行投影（matrixWorldInverse 只在 render 時更新，可能過期）。
+// 3D mesh → 螢幕矩形（CSS px）。依賴 render 後的相機矩陣，給聽牌標籤每幀定位用
+const _msrV = new THREE.Vector3();
+function _meshScreenRect(m) {
+  const cr = document.getElementById('scene').getBoundingClientRect();
+  if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+  const b = m.geometry.boundingBox; let l = 1e9, t = 1e9, r = -1e9, bt = -1e9;
+  for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+    _msrV.set(x, y, z).applyMatrix4(m.matrixWorld).project(camera);
+    const sx = cr.left + (_msrV.x + 1) / 2 * cr.width, sy = cr.top + (1 - _msrV.y) / 2 * cr.height;
+    l = Math.min(l, sx); r = Math.max(r, sx); t = Math.min(t, sy); bt = Math.max(bt, sy);
+  }
+  return { l, t, r, b: bt, cx: (l + r) / 2 };
+}
+
 function _placeSidePanels() {
   const cv = document.getElementById('scene'), hud = document.querySelector('.hud');
   if (!cv || !hud) return;
@@ -7171,12 +7183,7 @@ const Game={
           case 'skip-riichi': document.getElementById('ht0')?.classList.add('my-turn');break;
           case 'riichi': this.startRiichiSelect();break;
           case 'stop-riichi': this.stopRiichi();break;
-          case 'cancel-riichi':
-            this._endRiichiSelect();
-            document.getElementById('ht0')?.classList.add('my-turn');
-            this.showBtns([{type:'riichi',label:'聽牌',cls:'riichi'}]);
-            this.startTimer(0);
-            break;
+          case 'cancel-riichi': this.cancelRiichiSelect();break;
         }
       };
       ap.appendChild(b);
@@ -7767,84 +7774,98 @@ const Game={
     });
     // 3D 手牌：候選牌浮起（沿用鳴牌候選的浮起效果），點 3D 牌也能選（見 setupRaycast）
     this._riichiCands=candIds;this._meldFocus=candIds;
+    document.getElementById('hand-bar')?.classList.remove('show'); // 選牌面板已列出聽牌資訊，先收起
     if(typeof render3D==='function')render3D();
-    // 原本用 type 'skip' → nextTurn()：沒出牌就跳過自己回合 → 相公
-    this.showBtns([{type:'cancel-riichi',label:'取消聽牌',cls:'ask'}]);
+    // 取消在牌上方的提示列（_showRiichiPanel）；不再用 showBtns 的「取消聽牌」（會蓋住手牌）
     this.startTimer(0); // 選牌期間照常倒數，逾時代打（doDiscard 會結束選牌狀態）
   },
   _endRiichiSelect(){
     document.getElementById('riichi-select-panel')?.remove();
     if(!this._riichiCands)return;
-    this._riichiCands=null;this._meldFocus=null;
+    this._riichiCands=null;this._meldFocus=null;this._riichiRows=null;this._riichiHoverId=null;
+    this._updateHandBar?.(); // 恢復聽牌提示欄
     if(typeof render3D==='function')render3D();
   },
 
+  // 聽牌選牌（方案 A）：不開中央面板，直接在 3D 手牌上標示
+  //   每張候選牌頭上小標「N張」（打它之後聽幾張；最多＝金、其餘綠、0＝紅）；
+  //   滑到（手機：第一次點）某張 → 牌上方卡片列出聽哪些牌、各剩幾張；點該牌＝宣告聽牌並打出
+  //   位置由 tick 每幀呼叫 _placeRiichiTags 跟著 3D 牌走。容器沿用 #riichi-select-panel，其他清除路徑不用改
   _showRiichiPanel(candidates, s){
-    // Remove old panel
-    const old=document.getElementById('riichi-select-panel');
-    if(old)old.remove();
+    document.getElementById('riichi-select-panel')?.remove();
+    const hand=s.hands[0].filter(x=>!x.fl);
+    // 同種牌合併（打哪張都一樣），依剩餘張數多→少排序
+    const kinds=new Map();
+    candidates.forEach(t=>{const k=t.s+t.v;if(!kinds.has(k))kinds.set(k,{tile:t,ids:[]});kinds.get(k).ids.push(t.id);});
+    const rows=[...kinds.values()].map(c=>{
+      const waiting=tenpaiTiles(hand.filter(x=>x.id!==c.tile.id),s.melds[0]);
+      const waits=waiting.map(wt=>({wt,rem:discRemaining(wt,s.discards,s.melds,hand)}));
+      return {...c,waits,total:waits.reduce((a,w)=>a+w.rem,0)};
+    }).filter(r=>r.waits.length).sort((a,b)=>b.total-a.total);
+    rows.forEach((r,i)=>{r.best=i===0&&rows.length>1;r.color=r.total===0?'#e74c3c':r.best?'#f5cc6a':'#2ecc71';});
+    this._riichiRows=rows;this._riichiHoverId=null;
 
-    const panel=document.createElement('div');
-    panel.id='riichi-select-panel';
-    panel.style.cssText=`
-      position:fixed;left:50%;bottom:calc(18vh + 120px);transform:translateX(-50%);
-      background:rgba(4,12,6,.97);border:1.5px solid #2ecc71;border-radius:12px;
-      padding:10px 16px;z-index:260;max-width:90vw;font-family:'Noto Serif TC';
-      box-shadow:0 0 20px rgba(46,204,113,.3);
-    `;
-
-    const title=document.createElement('div');
-    title.style.cssText='color:#2ecc71;font-weight:900;font-size:.85rem;margin-bottom:8px;letter-spacing:.1em;text-align:center';
-    title.textContent='選擇打出哪張牌聽牌';
-    panel.appendChild(title);
-
-    candidates.forEach(discTile=>{
-      // Calculate what tiles we'd be waiting for after discarding this tile
-      const afterHand=s.hands[0].filter(x=>!x.fl&&x.id!==discTile.id);
-      const waiting=tenpaiTiles(afterHand,s.melds[0]);
-      if(!waiting.length)return;
-
-      const row=document.createElement('div');
-      row.style.cssText='display:flex;align-items:center;gap:6px;margin:5px 0;padding:5px 8px;border-radius:7px;background:rgba(255,255,255,.05);cursor:pointer;transition:background .15s';
-      row.addEventListener('mouseenter',()=>{row.style.background='rgba(46,204,113,.12)';});
-      row.addEventListener('mouseleave',()=>{row.style.background='rgba(255,255,255,.05)';});
-      row.onclick=()=>this.confirmRiichi(discTile);
-
-      // Discard tile display
-      const discEl=mkTile(discTile,'sm');discEl.style.cursor='pointer';
-      const arrow=document.createElement('span');
-      arrow.style.cssText='color:rgba(255,255,255,.8);font-size:.95rem;font-weight:700';
-      arrow.textContent='→ 聽';
-
-      // Waiting tiles with counts
-      const waitRow=document.createElement('div');
-      waitRow.style.cssText='display:flex;flex-wrap:wrap;gap:4px;align-items:center';
-
-      let totalRemaining=0;
-      waiting.forEach(wt=>{
-        const rem=discRemaining(wt,s.discards,s.melds,s&&s.hands[0]?s.hands[0].filter(x=>!x.fl):null);
-        totalRemaining+=rem;
-        const entry=document.createElement('div');
-        entry.style.cssText='display:flex;flex-direction:column;align-items:center;gap:1px';
-        const te=mkTile({...wt,id:88888},'ti');te.style.cursor='pointer';
-        const cnt=document.createElement('span');
-        cnt.style.cssText=`font-size:.75rem;font-weight:700;color:${rem===0?'#e74c3c':rem<=2?'#e67e22':'#2ecc71'}`;
-        cnt.textContent=`剩${rem}`;
-        entry.appendChild(te);entry.appendChild(cnt);
-        waitRow.appendChild(entry);
+    const ov=document.createElement('div');
+    ov.id='riichi-select-panel';
+    ov.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:260;font-family:"Noto Sans TC",sans-serif';
+    // 上方提示列＋取消（取代原本蓋在手牌上的「取消聽牌」按鈕）
+    const bar=document.createElement('div');bar.className='rq-bar';
+    bar.style.cssText='position:absolute;transform:translate(-50%,-100%);display:flex;align-items:center;gap:10px;white-space:nowrap;'+
+      'background:rgba(4,12,6,.92);border:1.5px solid #2ecc71;border-radius:999px;padding:5px 6px 5px 14px;color:#e8f5ec;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.6)';
+    bar.innerHTML='<span><b style="color:#2ecc71">聽牌</b>：點浮起的牌打出　<span style="opacity:.7">數字＝打它之後聽幾張</span></span>';
+    const cancel=document.createElement('button');cancel.type='button';cancel.textContent='取消';
+    cancel.style.cssText='pointer-events:auto;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:999px;padding:3px 12px;font:700 12px "Noto Sans TC",sans-serif';
+    cancel.onclick=()=>this.cancelRiichiSelect();
+    bar.appendChild(cancel);ov.appendChild(bar);
+    rows.forEach(r=>r.ids.forEach(id=>{
+      const b=document.createElement('div');b.className='rq-tag';b.dataset.id=id;b.textContent=`${r.total}張`;
+      b.style.cssText=`position:absolute;transform:translate(-50%,-100%);background:rgba(10,8,4,.92);border:1.5px solid ${r.color};color:${r.color};`+
+        'font-weight:900;font-size:12px;padding:1px 6px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.6)';
+      ov.appendChild(b);
+    }));
+    const card=document.createElement('div');card.className='rq-card';card.style.display='none';ov.appendChild(card);
+    document.body.appendChild(ov);
+  },
+  // tick 每幀（render 之後）呼叫：標籤／卡片／提示列跟著浮起中的 3D 牌移動
+  _placeRiichiTags(){
+    const ov=document.getElementById('riichi-select-panel');
+    if(!ov||!this._riichiRows)return;
+    const rectOf=id=>{const e=_p0HandMeshes.find(m=>m.tileId===id);return e?_meshScreenRect(e.mesh):null;};
+    let minTop=1e9,l=1e9,r=-1e9;
+    _p0HandMeshes.forEach(e=>{const rc=_meshScreenRect(e.mesh);minTop=Math.min(minTop,rc.t);l=Math.min(l,rc.l);r=Math.max(r,rc.r);});
+    ov.querySelectorAll('.rq-tag').forEach(b=>{const rc=rectOf(+b.dataset.id);if(!rc)return;b.style.left=rc.cx+'px';b.style.top=(rc.t-4)+'px';});
+    const bar=ov.querySelector('.rq-bar');
+    if(bar&&l<r){bar.style.left=((l+r)/2)+'px';bar.style.top=(minTop-34)+'px';}
+    const card=ov.querySelector('.rq-card'),hid=this._riichiHoverId;
+    const row=hid!=null&&this._riichiRows.find(x=>x.ids.includes(hid));
+    if(!row){card.style.display='none';card.dataset.k='';return;}
+    if(card.dataset.k!==row.tile.s+row.tile.v){
+      card.dataset.k=row.tile.s+row.tile.v;
+      card.innerHTML='';
+      card.style.cssText=`position:absolute;transform:translate(-50%,-100%);background:rgba(4,12,6,.97);border:1.5px solid ${row.color};`+
+        'border-radius:10px;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.7);z-index:1';
+      const h=document.createElement('div');h.style.cssText='color:#fff;font-weight:700;font-size:13px;margin-bottom:6px;text-align:center;white-space:nowrap';
+      h.textContent=`打這張 → 聽 ${row.total} 張`+(row.best?'（最多）':'');card.appendChild(h);
+      const w=document.createElement('div');w.style.cssText='display:flex;gap:8px;justify-content:center';
+      row.waits.forEach(({wt,rem})=>{
+        const en=document.createElement('div');en.style.cssText='display:flex;flex-direction:column;align-items:center;gap:2px';
+        const te=mkTile({...wt,id:88888},'');te.style.cssText+='zoom:.5;flex-shrink:0;'; // tooltip 牌：全尺寸 mkTile 再 zoom（見 CLAUDE.md）
+        const c=document.createElement('span');c.style.cssText=`font:700 12px "Noto Sans TC",sans-serif;color:${rem===0?'#e74c3c':rem<=2?'#e67e22':'#2ecc71'}`;c.textContent=`剩${rem}`;
+        en.appendChild(te);en.appendChild(c);w.appendChild(en);
       });
-
-      // Total summary
-      const total=document.createElement('span');
-      total.style.cssText=`font-size:.72rem;font-weight:700;margin-left:4px;color:${totalRemaining===0?'#e74c3c':totalRemaining<=3?'#e67e22':'#2ecc71'}`;
-      total.textContent=`(共${totalRemaining}張)`;
-      waitRow.appendChild(total);
-
-      row.appendChild(discEl);row.appendChild(arrow);row.appendChild(waitRow);
-      panel.appendChild(row);
-    });
-
-    document.body.appendChild(panel);
+      card.appendChild(w);
+      const tip=document.createElement('div');tip.style.cssText='color:rgba(255,255,255,.6);font-size:11px;text-align:center;margin-top:6px;white-space:nowrap';
+      tip.textContent=_lastPtrType==='touch'?'再點一次這張＝宣告聽牌並打出':'點這張牌＝宣告聽牌並打出';card.appendChild(tip);
+      const ar=document.createElement('div');ar.style.cssText=`position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);border:8px solid transparent;border-bottom:0;border-top-color:${row.color}`;card.appendChild(ar);
+    }
+    const rc=rectOf(hid);
+    if(rc){card.style.display='block';card.style.left=rc.cx+'px';card.style.top=(rc.t-30)+'px';}
+  },
+  cancelRiichiSelect(){
+    this._endRiichiSelect();
+    document.getElementById('ht0')?.classList.add('my-turn');
+    this.showBtns([{type:'riichi',label:'聽牌',cls:'riichi'}]);
+    this.startTimer(0);
   },
 
   confirmRiichi(tile){
@@ -8788,6 +8809,7 @@ const pointer   = new THREE.Vector2();
 let _hoveredMesh = null;
 
 function setupRaycast() {
+  canvas.addEventListener('pointerdown', (e) => { _lastPtrType = e.pointerType; });
   canvas.addEventListener('click', (e) => {
     if (!Game || !Game.st || Game.st.phase !== 'playing' || Game.st.turn !== 0) return;
     if (Game._isDiscarding) return;
@@ -8810,7 +8832,10 @@ function setupRaycast() {
 
     // 聽牌選牌中：只接受候選牌（點了等同在面板選該張），其他牌不動作
     if (Game._riichiCands) {
-      if (Game._riichiCands.has(entry.tileId)) Game.confirmRiichi(entry.tile);
+      if (!Game._riichiCands.has(entry.tileId)) return;
+      // 觸控沒有滑入：第一次點先顯示該張的聽牌卡片，再點同一張才宣告
+      if (_lastPtrType === 'touch' && Game._riichiHoverId !== entry.tileId) { Game._riichiHoverId = entry.tileId; return; }
+      Game.confirmRiichi(entry.tile);
       return;
     }
 
@@ -8847,6 +8872,7 @@ function setupRaycast() {
     const meshes = _p0HandMeshes.map(m => m.mesh);
     const hits = raycaster.intersectObjects(meshes, false);
     const newHit = hits.length ? hits[0].object : null;
+    if (Game._riichiRows) Game._riichiHoverId = newHit ? (_p0HandMeshes.find(m => m.mesh === newHit)?.tileId ?? null) : null;
 
     if (_hoveredMesh && _hoveredMesh !== newHit) {
       _hoveredMesh.position.y -= 0.3;
@@ -10390,6 +10416,7 @@ function tick(ts) {
     });
   }
   renderer.render(scene, camera);
+  if (Game && Game._riichiRows) Game._placeRiichiTags(); // 聽牌標籤跟著浮起中的牌走
 }
 tick();
 
@@ -10548,45 +10575,39 @@ if (Game) {
     }
   };
 
-  // 語音聊天：切換語音輸入區
-  Game.toggleVoiceInput = function() {
-    const vrow = document.getElementById('chat-voice-row');
-    const mrow = document.getElementById('chat-input-row');
-    if (!vrow || !mrow) return;
-    const opening = !vrow.classList.contains('show');
-    vrow.classList.toggle('show', opening);
-    mrow.style.display = opening ? 'none' : 'flex';
-    if (opening) setTimeout(() => document.getElementById('chat-voice-input')?.focus(), 80);
-  };
-  // 送出語音訊息(會用 SpeechSynthesis 念出來)
-  Game.sendVoiceChat = function() {
-    const inp = document.getElementById('chat-voice-input');
-    if (!inp) return;
-    const txt = [...inp.value.trim()].slice(0, 3).join('');
-    if (!txt) return;
-    inp.value = '';
-    this.toggleVoiceInput();
-    const s = this.st;
-    const myName = s?.names?.[0] || '玩家';
+  // 喊話：快捷喊話（預錄語音）＋自訂 6 字內（無預錄檔時退回瀏覽器語音）
+  //   原本的「🎤 切換 3 字輸入列」改為輸入列旁的 📢，CHAT_PHRASES 需與 tools/gen_voice.py PHRASES 同步
+  const CHAT_PHRASES = ['快一點啦', '好牌', '謝謝', '厲害', '不好意思', '等我一下', '再來一局', '哈哈'];
+  Game._shout = function(text) {
+    const txt = [...String(text || '').trim()].slice(0, 6).join('');
+    if (!txt) return false;
+    const now = Date.now();
+    if (now - (this._lastShout || 0) < 1500) return false; // 冷卻，避免連按洗版
+    this._lastShout = now;
+    const myName = this.st?.names?.[0] || document.getElementById('pname')?.value || '玩家';
     this._addChatMsg('voice', myName, `🔊 ${txt}`);
     this._sayChatTTS(txt);
     if (this._online && typeof MahjongNetwork !== 'undefined') {
       MahjongNetwork.broadcast({ type: 'voice_chat', from: myName, text: txt });
     }
+    return true;
   };
-  // TTS:用 SpeechSynthesis 念出聊天文字
-  Game._sayChatTTS = function(text) {
-    if (!window.speechSynthesis) return;
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'zh-TW';
-      u.rate = 0.85;
-      u.pitch = 1.4;
-      u.volume = 1.0;
-      speechSynthesis.cancel();
-      setTimeout(() => speechSynthesis.speak(u), 55);
-    } catch(e) { console.warn('[TTS] failed', e); }
+  Game.sendVoiceChat = function() {
+    const inp = document.getElementById('chat-input');
+    if (inp && this._shout(inp.value)) inp.value = '';
   };
+  // 念出聊天文字：走遊戲語音同一套（預錄 HsiaoChen → 缺檔退回瀏覽器語音），靜音／關語音時不念
+  Game._sayChatTTS = function(text) { try { Snd.say(text); } catch(e) {} };
+  (function buildPhrases() {
+    const box = document.getElementById('chat-phrases');
+    if (!box) return;
+    CHAT_PHRASES.forEach(t => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = t;
+      b.onclick = () => Game._shout(t);
+      box.appendChild(b);
+    });
+  })();
 
   // togglePause 直接覆寫（原版依賴 2D 版的 #pause-overlay/#pause-btn DOM，會 throw 卡死）
   Game.togglePause = function() {
@@ -11438,7 +11459,7 @@ window.Online = {
       case 'voice_chat':
         // v1.6.18: 收到語音聊天 — 顯示訊息並播放 TTS
         if(data.from&&data.text){
-          const _vt=[...String(data.text)].slice(0,3).join(''); // 對方也只能念 3 字（防長文洗版念不停）
+          const _vt=[...String(data.text)].slice(0,6).join(''); // 對方也只能念 6 字（防長文洗版念不停）
           Game._addChatMsg('voice',data.from,`🔊 ${_vt}`);
           Game._sayChatTTS(_vt);
           if(MahjongNetwork.isHost) MahjongNetwork.connections.forEach(c=>{if(c.open&&c.peer!==peerId)c.send({type:'voice_chat',from:data.from,text:_vt});});
