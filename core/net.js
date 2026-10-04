@@ -37,7 +37,7 @@ Platform.net = {
 
   _setupConn(c) {
     c.on('open', () => { if (!this.conns.includes(c)) this.conns.push(c); this._emit('_open', { name: String((c.metadata && c.metadata.name) || '').replace(/[<>&"'`]/g, '').slice(0, 16) }, c.peer); }); // 賓客名稱會進 innerHTML，入口濾掉 HTML 字元防 XSS
-    c.on('data', d => { if (d && d.type) this._emit(d.type, d, c.peer); });
+    c.on('data', d => { if (d && typeof d.type === 'string' && d.type[0] !== '_') this._emit(d.type, d, c.peer); }); // _open/_close 等內部事件只能由本機觸發，擋掉對方偽造
     c.on('close', () => { this.conns = this.conns.filter(x => x !== c); this._emit('_close', {}, c.peer); });
     c.on('error', e => console.error('conn error', e));
   },
@@ -56,14 +56,15 @@ Platform.net = {
   renderRoom(root, O, title, onStart) {
     if (!root || O.started) return;
     const names = O.names || [];
-    const list = names.map((n, i) => `<li>${i === O.mySeat ? '👉 ' : ''}座位 ${i + 1}：${n || '（空）'}${i === 0 ? '（房主）' : ''}</li>`).join('');
+    const esc = t => String(t).replace(/[<>&"'`]/g, c => `&#${c.charCodeAt(0)};`); // 名稱可能來自對方，進 innerHTML 前跳脫
+    const list = names.map((n, i) => `<li>${i === O.mySeat ? '👉 ' : ''}座位 ${i + 1}：${n ? esc(n) : '（空）'}${i === 0 ? '（房主）' : ''}</li>`).join('');
     if (O.isHost) {
       const url = this.roomId ? this.inviteUrl() : '';
       root.innerHTML = `<div class="net-room"><h2>${title} — 開房</h2>
         <div class="net-code">房間碼：<b>${this.roomId || '…'}</b></div>
         <div class="net-url"><input id="net-url" readonly value="${url}"><button class="btn" id="net-copy">複製邀請連結</button></div>
         <ul class="net-list">${list}</ul>
-        <p class="net-hint">把連結傳給朋友；空位由 AI 補滿。</p>
+        <p class="net-hint">把連結傳給朋友；空位由電腦補滿。</p>
         <button class="btn btn-primary" id="net-start">開始遊戲</button></div>`;
       const cp = root.querySelector('#net-copy'); if (cp) cp.onclick = () => { const i = root.querySelector('#net-url'); i.select(); try { document.execCommand('copy'); Platform.toast('已複製連結'); } catch {} };
       const st = root.querySelector('#net-start'); if (st) st.onclick = onStart;
