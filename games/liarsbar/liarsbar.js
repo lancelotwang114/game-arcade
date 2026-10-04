@@ -263,7 +263,7 @@ if (typeof Platform !== 'undefined') {
     const players = [0, 1, 2, 3].map(i => {
       const occupied = i === 0 || this.O.names[i] != null;
       return {
-        id: i, name: this.O.names[i] || (['', 'AI甲', 'AI乙', 'AI丙'][i]),
+        id: i, name: this.O.names[i] || (['', '阿牛', '小美', '老張'][i]),
         isAI: !occupied, _remote: occupied && i !== 0,
         alive: true, hand: [], gun: this.makeGun(), style: i === 0 ? null : styles[(i - 1) % 3],
       };
@@ -293,7 +293,7 @@ if (typeof Platform !== 'undefined') {
       const seat = this.O.seatOf[from]; if (seat == null) return;
       delete this.O.peerOf[seat]; delete this.O.seatOf[from]; this.O.names[seat] = null;
       if (this.O.started && this.st && this.st.players[seat]) {
-        const p = this.st.players[seat]; p.isAI = true; p._remote = false; this.log(`${p.name} 離線，改由 AI 接手`);
+        const p = this.st.players[seat]; p.isAI = true; p._remote = false; this.log(`${p.name} 離線，改由電腦接手`);
         if (this.st.turn === seat && this.st.phase === 'play') this.tick();
         this.render();
       } else this._renderRoom();

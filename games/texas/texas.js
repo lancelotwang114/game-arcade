@@ -398,7 +398,7 @@ if (typeof Platform !== 'undefined') {
     const players = [0, 1, 2, 3].map(i => {
       const occupied = i === 0 || names[i] != null;
       return {
-        id: i, name: names[i] || (['', 'AI甲', 'AI乙', 'AI丙'][i]), isAI: !occupied, _remote: occupied && i !== 0,
+        id: i, name: names[i] || (['', '阿傑', '小琪', '老王'][i]), isAI: !occupied, _remote: occupied && i !== 0,
         chips: this.START, hole: [], bet: 0, totalInvested: 0, folded: false, allin: false, acted: false, style: styles[i % 3], last: '',
       };
     });
@@ -425,7 +425,7 @@ if (typeof Platform !== 'undefined') {
       const seat = this.O.seatOf[from]; if (seat == null) return;
       delete this.O.peerOf[seat]; delete this.O.seatOf[from]; this.O.names[seat] = null;
       if (this.O.started && this.st && this.st.players[seat]) {
-        const p = this.st.players[seat]; p.isAI = true; p._remote = false; this.log(`${p.name} 離線，改由 AI 接手`);
+        const p = this.st.players[seat]; p.isAI = true; p._remote = false; this.log(`${p.name} 離線，改由電腦接手`);
         if (this.st.toAct === seat) this._after(900, () => this.aiAct(seat)); else this.render();
       } else this._renderRoom();
       Platform.net.broadcast('lobby', { names: this.O.names });

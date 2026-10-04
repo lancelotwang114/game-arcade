@@ -269,7 +269,7 @@ if (typeof Platform !== 'undefined') {
   };
   B._newMatchOnline = function () {
     const names = this.O.names;
-    this.st = { players: [0, 1, 2, 3].map(i => ({ id: i, name: names[i] || ['', 'AI甲', 'AI乙', 'AI丙'][i], isAI: !(i === 0 || names[i] != null), hand: [], score: 0, last: '' })),
+    this.st = { players: [0, 1, 2, 3].map(i => ({ id: i, name: names[i] || ['', '阿傑', '小琪', '老王'][i], isAI: !(i === 0 || names[i] != null), hand: [], score: 0, last: '' })),
       handNo: 0, turn: 0, table: null, trick: [], passes: 0, leader: -1, first: true, phase: 'idle', log: [], winner: -1, lastWinner: -1 };
     this._overShown = false;
     this.newHand();
