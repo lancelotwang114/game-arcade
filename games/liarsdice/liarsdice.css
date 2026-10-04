@@ -1,0 +1,161 @@
+/* 吹牛骰子 — 西部酒館：俯視圓木桌，四個骰盅圍坐；開了就俄羅斯輪盤 */
+.ld-root {
+  position: fixed; inset: 0; overflow: hidden;
+  --ink: #f3e6cc; --muted: #c4ad87; --accent: #f0b54a; --accent-ink: #2a1803; --danger: #c8372d; --ok: #6be38f;
+  --panel: rgba(28,18,10,.92); --line: rgba(240,181,74,.35); --die: #fbf3e0; --pip: #2a1a0c;
+  --cup: linear-gradient(90deg, #4a2a14, #8a5428 45%, #5a3218); --cup-rim: #2a170a;
+  --title: 'Rye', 'Noto Serif TC', serif; --o: 'Oswald', 'Noto Sans TC', system-ui, sans-serif;
+  background: radial-gradient(70% 60% at 50% 30%, #3a2716, #1b120a 55%, #0b0705); background-color: #0b0705;
+  color: var(--ink); font-family: 'Noto Sans TC', system-ui, sans-serif;
+}
+.ld-app { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+.ld-app button { font: inherit; color: inherit; cursor: pointer; }
+.ld-app.shake { animation: ldShake .45s; }
+@keyframes ldShake { 20% { translate: -8px 4px; } 40% { translate: 7px -6px; } 60% { translate: -5px 5px; } 80% { translate: 3px -2px; } }
+.ld-app button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 頂列：左側留給平台「← 回大廳」 */
+.ld-top { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px 140px; min-height: 68px; position: relative; z-index: 20; }
+.ld-brand { font: 400 22px var(--title); letter-spacing: .06em; color: var(--accent); white-space: nowrap; }
+.ld-info { flex: 1; text-align: center; font-size: 13px; color: var(--muted); }
+.ld-wild { display: inline-block; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--accent); color: var(--accent); font-size: 12px; margin-left: 6px; }
+.ld-wild.off { border-color: var(--muted); color: var(--muted); text-decoration: line-through; }
+.ld-ibtn { min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); font-size: 15px; }
+
+/* 骰子（CSS 點陣） */
+.ld-die { --s: 30px; width: var(--s); height: var(--s); flex-shrink: 0; border-radius: calc(var(--s) * .2); background: var(--die); display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: calc(var(--s) * .12);
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.18), 0 2px 5px rgba(0,0,0,.5); transition: box-shadow .3s, transform .3s, opacity .3s; }
+.ld-die i { width: 70%; height: 70%; margin: auto; border-radius: 50%; background: var(--pip); visibility: hidden; }
+.ld-die i.on { visibility: visible; }
+.ld-die[data-f="1"] i.on { background: var(--danger); width: 90%; height: 90%; }
+.ld-die.hit { box-shadow: 0 0 0 3px var(--accent), 0 0 18px var(--accent); transform: translateY(-4px); }
+.ld-die.hitwild { box-shadow: 0 0 0 3px #59e0ff, 0 0 18px #59e0ff; transform: translateY(-4px); }
+.ld-die.dim { opacity: .35; }
+.ld-die.roll { animation: ldTumble .5s var(--d, 0ms) ease-out both; }
+@keyframes ldTumble { from { transform: rotate(-200deg) scale(.4); opacity: 0; } }
+
+/* 骰盅 */
+.ld-cupwrap { position: relative; display: grid; place-items: end center; height: 84px; width: 150px; }
+.ld-dice { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: 150px; }
+.ld-cup { position: absolute; left: 50%; bottom: 0; translate: -50% 0; width: 92px; height: 78px; background: var(--cup); clip-path: polygon(14% 0, 86% 0, 100% 100%, 0 100%);
+  border-radius: 8px 8px 4px 4px; box-shadow: inset 0 -8px 0 var(--cup-rim); transition: translate .45s cubic-bezier(.3,.7,.25,1), rotate .45s, opacity .4s; z-index: 2; }
+.ld-cup::before { content: ''; position: absolute; left: 14%; right: 14%; top: 8px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.12); }
+.ld-cup.lift { translate: -50% -70px; rotate: -8deg; }
+.ld-seat[data-p="0"] .ld-cup.lift { translate: calc(-50% + 110px) -6px; rotate: 18deg; } /* 自己的盅往旁邊掀，不擋中央看板 */
+.ld-cup.shake { animation: ldCupShake .9s ease-in-out; }
+@keyframes ldCupShake { 15% { rotate: -14deg; translate: -58% -8px; } 30% { rotate: 12deg; translate: -42% -12px; } 45% { rotate: -10deg; translate: -56% -6px; } 60% { rotate: 9deg; translate: -44% -10px; } 80% { rotate: -4deg; translate: -50% -3px; } }
+.ld-cup.slam { animation: ldCupSlam .25s ease-in; }
+@keyframes ldCupSlam { from { translate: -50% -14px; } }
+.ld-seat.dead .ld-cup { opacity: .25; }
+
+/* 牌桌與座位 */
+.ld-stage { position: relative; min-height: 0; }
+.ld-stage::before { content: ''; position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: min(860px, 88%); height: min(500px, 86%); border-radius: 50%;
+  background: repeating-radial-gradient(ellipse at 50% 50%, #5b3a1f 0 10px, #503219 10px 22px), radial-gradient(closest-side, #6a4424, #3a2412); background-blend-mode: overlay;
+  box-shadow: 0 0 0 14px #2a1a0d, 0 0 0 17px #120a05, 0 30px 70px rgba(0,0,0,.7), inset 0 0 90px rgba(0,0,0,.65); }
+.ld-seat { position: absolute; z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: opacity .5s, filter .5s; }
+.ld-seat[data-p="2"] { left: 50%; top: 4%; translate: -50% 0; }
+.ld-seat[data-p="1"] { right: 8%; top: 34%; } .ld-seat[data-p="3"] { left: 8%; top: 34%; }
+.ld-seat[data-p="0"] { left: 50%; bottom: 2%; translate: -50% 0; }
+.ld-tag { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); max-width: 46vw; }
+.ld-ava { width: 36px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-weight: 900; background: rgba(255,255,255,.1); border: 2px solid var(--line); flex-shrink: 0; }
+.ld-nm { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9em; }
+.ld-cyl { display: flex; gap: 3px; } .ld-cyl i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); } .ld-cyl i.fired { background: var(--muted); opacity: .5; }
+.ld-seat.turn .ld-tag { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 22px var(--accent); }
+.ld-seat.dead .ld-tag { opacity: .35; filter: grayscale(1); }
+.ld-bub { position: absolute; z-index: 6; top: -8px; left: 50%; translate: -50% -100%; white-space: nowrap; font: 700 15px 'Noto Sans TC'; padding: 5px 14px; border-radius: 99px; background: var(--ink); color: #111; opacity: 0; pointer-events: none; }
+.ld-seat[data-p="0"] .ld-bub { top: auto; bottom: 8px; left: calc(100% + 10px); translate: 0 0; }
+.ld-bub.open { background: var(--danger); color: #fff; font-size: 18px; }
+.ld-bub.pop { animation: ldPop .35s cubic-bezier(.2,1.6,.4,1) forwards; }
+@keyframes ldPop { from { opacity: 0; scale: .5; } to { opacity: 1; scale: 1; } }
+
+/* 叫價看板 */
+.ld-board { position: absolute; z-index: 2; left: 50%; top: 42%; translate: -50% -50%; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.ld-cur { font: 700 34px var(--o); color: var(--accent); display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.ld-cur .ld-die { --s: 40px; }
+.ld-curby { font-size: 13px; color: var(--muted); min-height: 18px; }
+.ld-tally { font: 700 22px 'Noto Sans TC'; min-height: 30px; }
+.ld-tally.ok { color: var(--ok); } .ld-tally.bad { color: var(--danger); }
+.ld-stamp { position: absolute; z-index: 25; left: 50%; top: 42%; font: 900 clamp(48px, 9vw, 110px) var(--title); color: var(--danger); border: 6px solid var(--danger); padding: 0 24px; border-radius: 14px; opacity: 0; pointer-events: none; transform: translate(-50%,-50%) rotate(-10deg) scale(2.4); }
+.ld-stamp.show { animation: ldStamp 1.3s cubic-bezier(.2,1.5,.4,1) forwards; }
+@keyframes ldStamp { 0% { opacity: 0; transform: translate(-50%,-50%) rotate(-14deg) scale(2.4); } 18% { opacity: 1; transform: translate(-50%,-50%) rotate(-9deg) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-50%) rotate(-9deg) scale(1); } }
+
+/* 你的區：叫價面板 */
+.ld-dock { position: relative; z-index: 10; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: end; padding: 0 16px calc(12px + env(safe-area-inset-bottom)); max-width: 1100px; width: 100%; justify-self: center; }
+.ld-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); min-width: 0; }
+.ld-qrow { display: flex; align-items: center; gap: 8px; justify-content: center; }
+.ld-qbtn { min-width: 48px; min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.06); font: 700 22px var(--o); }
+.ld-qv { font: 700 30px var(--o); min-width: 2.2em; text-align: center; color: var(--accent); }
+.ld-qv small { font: 500 13px 'Noto Sans TC'; color: var(--muted); margin-left: 2px; }
+.ld-tip { flex: 1; font-size: 13px; color: var(--muted); text-align: center; min-height: 18px; }
+.ld-frow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.ld-fbtn { min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.04); display: grid; place-items: center; padding: 4px; }
+.ld-fbtn .ld-die { --s: 34px; }
+.ld-fbtn.sel { border-color: var(--accent); background: rgba(240,181,74,.22); }
+.ld-app button:disabled { opacity: .3; cursor: default; }
+.ld-acts { display: flex; flex-direction: column; gap: 8px; min-width: 160px; }
+.ld-act { min-height: 52px; min-width: 64px; border-radius: 14px; border: 0; font: 700 18px 'Noto Sans TC'; }
+.ld-act.bid { background: var(--accent); color: var(--accent-ink); }
+.ld-act.open { background: var(--danger); color: #fff; font-size: 22px; letter-spacing: .15em; }
+
+/* 輪盤 */
+.ld-rl { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(0,0,0,.8); opacity: 0; pointer-events: none; transition: opacity .35s; }
+.ld-rl.on { opacity: 1; pointer-events: auto; }
+.ld-rlbox { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.ld-rlwho { font: 900 26px 'Noto Sans TC'; text-align: center; } .ld-rlwho small { display: block; font: 500 14px 'Noto Sans TC'; color: var(--muted); }
+.ld-rlcyl { width: min(280px, 60vw, 40vh); aspect-ratio: 1; } .ld-rlcyl svg { width: 100%; height: 100%; overflow: visible; }
+.ld-rot { transform-origin: 0 0; transition: transform 2.2s cubic-bezier(.12,.75,.18,1); }
+.ld-rlmsg { font: 900 clamp(30px, 6vw, 56px) var(--title); min-height: 1.2em; } .ld-rlmsg.bang { color: var(--danger); text-shadow: 0 0 30px var(--danger); } .ld-rlmsg.click { color: var(--muted); }
+.ld-flash { position: absolute; inset: 0; z-index: 50; pointer-events: none; opacity: 0; background: radial-gradient(circle, #fff 0%, #ffd27a 30%, rgba(200,20,20,.85) 70%); }
+.ld-flash.go { animation: ldFlash .9s ease-out; } @keyframes ldFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 紀錄 */
+.ld-log { position: absolute; z-index: 30; top: 0; right: 0; bottom: 0; width: min(320px, 86vw); background: rgba(20,13,7,.97); border-left: 1px solid var(--line);
+  padding: 16px; transform: translateX(100%); transition: transform .3s; overflow-y: auto; }
+.ld-log.open { transform: none; }
+.ld-log h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-content: space-between; align-items: center; }
+.ld-log ul { margin: 0; padding: 0; } .ld-log li { list-style: none; font-size: 14px; color: var(--muted); padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+
+@media (orientation: portrait) {
+  .ld-top { padding-left: 132px; } .ld-brand { display: none; } .ld-info { font-size: 11px; }
+  .ld-stage::before { width: 94%; height: 92%; }
+  .ld-dock { grid-template-columns: 1fr; padding: 0 8px calc(8px + env(safe-area-inset-bottom)); gap: 6px; }
+  .ld-acts { flex-direction: row; min-width: 0; } .ld-act { flex: 1; }
+  .ld-cupwrap { width: 110px; height: 70px; } .ld-cup { width: 70px; height: 60px; } .ld-dice { max-width: 110px; } .ld-die { --s: 22px; }
+  /* 直拿：三位對手排成上方一排，中央看板有整寬可用 */
+  .ld-seat[data-p="2"] { top: 3%; } .ld-seat[data-p="1"] { right: 1%; top: 3%; } .ld-seat[data-p="3"] { left: 1%; top: 3%; }
+  .ld-seat:not([data-p="0"]) .ld-ava { display: none; } .ld-seat:not([data-p="0"]) .ld-tag { padding: 3px 10px; }
+  .ld-seat:not([data-p="0"]) .ld-cup.lift { translate: -50% 0; rotate: 0deg; opacity: 0; }
+  .ld-seat:not([data-p="0"]) .ld-bub { top: 4px; translate: -50% 0; }
+  .ld-board { top: 50%; width: 92%; } .ld-tally { max-width: 100%; }
+  .ld-seat[data-p="0"] .ld-die { --s: 30px; } .ld-seat[data-p="0"] .ld-dice { max-width: 180px; } .ld-seat[data-p="0"] .ld-cupwrap { width: 180px; }
+  .ld-seat[data-p="0"] .ld-cup.lift { translate: calc(-50% + 128px) -6px; }
+  .ld-tag { padding: 3px 10px 3px 3px; } .ld-ava { width: 32px; }
+  .ld-fbtn .ld-die { --s: 28px; }
+}
+/* 矮手機直拿（如 375×667） */
+@media (orientation: portrait) and (max-height: 720px) {
+  .ld-top { min-height: 56px; padding-top: 6px; }
+  .ld-qbtn { min-height: 44px; } .ld-qv { font-size: 24px; } .ld-act { min-height: 48px; } .ld-tip { display: none; }
+  .ld-cur { font-size: 28px; } .ld-cur .ld-die { --s: 32px; } .ld-tally { font-size: 18px; }
+}
+/* 橫向但很矮（手機橫拿）：面板改一排、桌面扁寬 */
+@media (orientation: landscape) and (max-height: 560px) {
+  .ld-top { min-height: 52px; padding-top: 4px; }
+  .ld-dock { padding: 0 8px calc(6px + env(safe-area-inset-bottom)); gap: 8px; }
+  .ld-panel { flex-direction: row; align-items: center; padding: 6px 8px; } .ld-qrow { flex-shrink: 0; gap: 6px; } .ld-tip { display: none; }
+  .ld-frow { grid-template-columns: repeat(6, 44px); gap: 4px; } .ld-fbtn { min-height: 44px; padding: 2px; } .ld-fbtn .ld-die { --s: 28px; }
+  .ld-qbtn { min-width: 44px; min-height: 44px; } .ld-qv { font-size: 24px; min-width: 1.6em; }
+  .ld-acts { flex-direction: row; min-width: 0; } .ld-act { min-height: 48px; padding: 0 12px; font-size: 16px; } .ld-act.open { font-size: 18px; }
+  /* 座位改橫排（盅在左、名牌在右），上下各省一半高度給中央看板 */
+  .ld-seat[data-p="0"], .ld-seat[data-p="2"] { flex-direction: row; gap: 8px; }
+  .ld-cupwrap { height: 60px; } .ld-cup { width: 66px; height: 56px; } .ld-die { --s: 22px; }
+  .ld-seat[data-p] .ld-cup.lift { translate: -50% 0; rotate: 0deg; opacity: 0; }
+  .ld-seat:not([data-p="0"]) .ld-bub { top: 4px; translate: -50% 0; }
+  .ld-seat[data-p="2"] { top: 2%; } .ld-seat[data-p="1"], .ld-seat[data-p="3"] { top: 26%; }
+  .ld-seat[data-p="1"] { right: 3%; } .ld-seat[data-p="3"] { left: 3%; }
+  .ld-cur { font-size: 26px; min-height: 36px; } .ld-cur .ld-die { --s: 30px; } .ld-tally { font-size: 17px; } .ld-board { top: 50%; gap: 2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ld-root *, .ld-root *::before, .ld-root *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
