@@ -122,7 +122,7 @@ body {
 .gc-btns .gc-cfg { flex: 0 0 44px; min-height: 44px; background: var(--bg2); color: var(--gold2); font-size: 18px; }
 .cfg-form { display: grid; gap: 10px; text-align: left; min-width: min(300px, 80vw); }
 .cfg-row { display: grid; grid-template-columns: 6em 1fr; align-items: center; gap: 10px; font-size: 15px; }
-.cfg-row input { min-height: 44px; background: rgba(0,0,0,.4); border: 1px solid var(--line); color: var(--ink);
+.cfg-row input { min-width: 0; width: 100%; box-sizing: border-box; min-height: 44px; background: rgba(0,0,0,.4); border: 1px solid var(--line); color: var(--ink);
   border-radius: 8px; padding: 6px 10px; font-size: 16px; font-family: inherit; }
 .cfg-row input:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 .net-cfg { color: var(--muted); font-size: 13px; margin: 4px 0 0; }

@@ -37,7 +37,28 @@ const Platform = {
       setTimeout(() => n.broadcast('switch', { game: id }), 300); // 等新遊戲掛好連線處理器，賓客的 rejoin 才接得住
       return;
     }
+    if (!join && !this.store.get('arcade_name', '')) { this.askName('開房前先取個暱稱', () => this.launchOnline(id)); return; } // 別讓朋友看到「房主」
     this.launch(id, { online: true, join: join || null });
+  },
+  // 連線前輸入暱稱（預填上次用的）；按確定才 go()，取消就留在大廳
+  askName(title, go) {
+    const m = this.ui.modal({
+      title,
+      html: `<label class="cfg-row"><span>你的暱稱</span><input type="text" maxlength="12" placeholder="例如：小明" autocomplete="nickname"></label>
+        <p class="net-hint" aria-live="polite"></p>`,
+      buttons: [
+        { label: '加入', primary: true, onClick: close => {
+          const nm = m.el.querySelector('input').value.replace(/[<>&"'`]/g, '').trim().slice(0, 12);
+          if (!nm) { m.el.querySelector('.net-hint').textContent = '請輸入暱稱'; m.el.querySelector('input').focus(); return; }
+          this.store.set('arcade_name', nm); close(); go();
+        } },
+        { label: '取消' },
+      ],
+    });
+    const inp = m.el.querySelector('input');
+    inp.value = this.store.get('arcade_name', '');
+    inp.onkeydown = e => { if (e.key === 'Enter') m.el.querySelector('.btn-primary').click(); };
+    setTimeout(() => { inp.focus(); inp.select(); }, 50);
   },
   // 回大廳：連線房主且有賓客 → 保留房間，賓客在大廳等房主選下一款
   leave() {
@@ -150,9 +171,10 @@ window.addEventListener('DOMContentLoaded', () => {
   renderLobby();
   const back = document.getElementById('back-btn');
   if (back) back.onclick = () => Platform.leave();
-  // 由邀請連結進入 → 自動以賓客加入
+  // 由邀請連結進入 → 先輸入暱稱，再以賓客加入
   if (Platform._pendingJoin) {
     const j = Platform._pendingJoin; Platform._pendingJoin = null;
-    Platform.launchOnline(j.game, { room: j.room, host: j.host });
+    const g = Platform.games.find(x => x.id === j.game);
+    Platform.askName(`加入${g ? g.name : '連線房間'}`, () => Platform.launchOnline(j.game, { room: j.room, host: j.host }));
   }
 });

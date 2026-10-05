@@ -33,7 +33,7 @@ Platform.net = {
     this.isHost = false; this.hostId = hostId;
     const old = this.conns.find(x => x.peer === hostId && x.open);
     if (old) { old.send({ type: 'rejoin' }); return old; } // 跟著房主換遊戲：沿用連線，請房主重新入座
-    const c = this.peer.connect(hostId, { reliable: true, metadata: { name: this.myName } });
+    const c = this.peer.connect(hostId, { reliable: true, metadata: { name: this.myName, game: Platform._active && Platform._active.id } });
     this._setupConn(c);
     return c;
   },
@@ -44,7 +44,15 @@ Platform.net = {
       if (this.isHost && Platform._active) try { c.send({ type: 'cfg', cfg: Platform.cfg(Platform._active.id) }); } catch {}
       this._emit('_open', { name: name() }, c.peer);
     };
-    c.on('open', () => { if (!this.conns.includes(c)) this.conns.push(c); seat(); if (!Platform._active) renderRoomBar(); });
+    c.on('open', () => {
+      if (!this.conns.includes(c)) this.conns.push(c);
+      const g = c.metadata && c.metadata.game, act = Platform._active;
+      // 賓客拿的是舊連結（房主已換遊戲 / 正在大廳選遊戲）→ 導到房主目前的狀態，而不是用錯的遊戲入座
+      if (this.isHost && !act) try { c.send({ type: 'hold' }); } catch {}
+      else if (this.isHost && g && g !== act.id) try { c.send({ type: 'switch', game: act.id }); } catch {}
+      else seat();
+      if (!act) renderRoomBar();
+    });
     c.on('data', d => {
       if (!d || typeof d.type !== 'string' || d.type[0] === '_') return; // _open/_close 等內部事件只能由本機觸發，擋掉對方偽造
       if (this.isHost && d.type === 'rejoin') { seat(); return; }

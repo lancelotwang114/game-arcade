@@ -2,7 +2,7 @@
 
 > 純前端、零建置的桌遊平台。一個大廳，三款牌桌遊戲；單機對電腦，或開房間邀朋友連線。
 
-🔗 **線上遊玩**：https://lancelotwang114.github.io/game-arcade/
+🔗 **線上遊玩**：https://game-arcade-7rz.pages.dev/
 
 ![遊戲大廳](docs/screenshots/lobby.jpg)
 
@@ -98,7 +98,9 @@ python -m http.server 8080
 
 ## 部署
 
-本專案以 GitHub Pages 直接發佈 `main` 分支的根目錄（Settings → Pages → Deploy from a branch → `main` / `(root)`）。推送到 `main` 後約一分鐘生效。專案根目錄附有 `.nojekyll`，確保所有檔案原樣提供。
+主要發佈在 Cloudflare Pages（https://game-arcade-7rz.pages.dev/）：專案連結本 repo 的 `main` 分支，Framework preset 選 None、Build command 與輸出目錄留空，推送到 `main` 後約一分鐘自動部署。
+
+GitHub Pages 同時保留為備援（Settings → Pages → Deploy from a branch → `main` / `(root)`）。專案根目錄附有 `.nojekyll`，確保所有檔案原樣提供。
 
 ## 素材與授權
 

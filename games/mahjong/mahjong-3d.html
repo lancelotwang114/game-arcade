@@ -1509,7 +1509,7 @@ body.in-lobby .hud { visibility:hidden; }
   <div class="tools">
     <div class="ic" data-label="提示" title="出牌提示 (H)" id="hud-hint-btn" onclick="Game.showHint?.()">💡</div>
     <div class="ic" data-label="輔助" title="輔助面板（聽牌計算 / 危險牌 / 牌追蹤）" id="hud-assist-btn" onclick="Game.toggleAssistPanel?.()">🧮</div>
-    <div class="ic ic-wide" data-label="AI 速度" title="AI 速度：正常" id="hud-speed-btn" onclick="Game.cycleSpeed?.()">正常</div>
+    <div class="ic ic-wide" data-label="電腦速度" title="電腦速度：正常" id="hud-speed-btn" onclick="Game.cycleSpeed?.()">正常</div>
     <div class="ic" data-label="代打" title="自動代打" id="hud-autoplay-btn" onclick="Game.toggleAutoPlay?.()">🤖</div>
     <div class="ic" data-label="音效" title="音效開關" id="hud-audio-btn" onclick="Game.toggleAudioMute?.()">🔊</div>
     <div class="ic" data-label="返回大廳" title="返回大廳" onclick="Game.returnLobby?.()">🏠</div>
@@ -1724,9 +1724,9 @@ body.in-lobby .hud { visibility:hidden; }
     <div id="lobby-solo" style="display:none">
       <button class="lobby-back-btn" onclick="Lobby.showHome()">← 返回</button>
       <div class="sec-title">💰 籌碼設定</div>
-      <div class="sgrid" style="grid-template-columns:1fr 1fr 1fr 1fr">
+      <div class="sgrid" style="grid-template-columns:1fr 1fr">
         <div class="fg" style="margin:0">
-          <label class="fl">底</label>
+          <label class="fl">底台</label>
           <select class="fi" id="sbase">
             <option value="1">1台底</option>
             <option value="2">2台底</option>
@@ -1734,7 +1734,7 @@ body.in-lobby .hud { visibility:hidden; }
           </select>
         </div>
         <div class="fg" style="margin:0">
-          <label class="fl">每台</label>
+          <label class="fl">每台金額</label>
           <select class="fi" id="stai">
             <option value="50">$50/台</option>
             <option value="100" selected>$100/台</option>
@@ -1766,7 +1766,7 @@ body.in-lobby .hud { visibility:hidden; }
       <div class="sec-title">⚙️ 遊戲設定</div>
       <div class="sgrid" style="grid-template-columns:1fr 1fr">
         <div class="fg" style="margin:0">
-          <label class="fl">AI 速度</label>
+          <label class="fl">電腦速度</label>
           <select class="fi" id="sspeed">
             <option value="slow">慢速</option>
             <option value="normal" selected>正常</option>
@@ -1814,9 +1814,9 @@ body.in-lobby .hud { visibility:hidden; }
             <div id="ol-player-list" style="margin-top:10px;text-align:center"></div>
             <div id="ol-host-settings">
             <div class="sec-title" style="margin-top:10px">💰 籌碼設定</div>
-            <div class="sgrid" style="grid-template-columns:1fr 1fr 1fr 1fr">
+            <div class="sgrid" style="grid-template-columns:1fr 1fr">
               <div class="fg" style="margin:0">
-                <label class="fl">底</label>
+                <label class="fl">底台</label>
                 <select class="fi" id="sbase-online">
                   <option value="1">1台底</option>
                   <option value="2">2台底</option>
@@ -1824,7 +1824,7 @@ body.in-lobby .hud { visibility:hidden; }
                 </select>
               </div>
               <div class="fg" style="margin:0">
-                <label class="fl">每台</label>
+                <label class="fl">每台金額</label>
                 <select class="fi" id="stai-online">
                   <option value="50">$50/台</option>
                   <option value="100" selected>$100/台</option>
@@ -4773,7 +4773,7 @@ const Game={
       const pn=document.getElementById(`pn${i}`);if(pn)pn.textContent=names[i];
     }
     this.render();
-    this.toast('已恢復上局牌局，'+(this.autoPlay?'AI 代打模式':'輪到你！'),2500);
+    this.toast('已恢復上局牌局，'+(this.autoPlay?'自動代打模式':'輪到你！'),2500);
     // 無論哪個玩家的回合，一律由 doTurn() 恢復（正確處理 AI 或玩家出牌）
     const s=this.st;
     if(s.phase==='playing'){
@@ -6770,7 +6770,7 @@ const Game={
             this._afkStreak=(this._afkStreak||0)+1;
             if(this._afkStreak>=2&&!this.autoPlay){
               this.autoPlay=true;
-              this.toast('⏰ 偵測到長時間未操作，已自動切換 AI 代打',4000);
+              this.toast('⏰ 偵測到長時間未操作，已自動切換為代打',4000);
               const apBtn=document.getElementById('autoplay-btn');
               if(apBtn){apBtn.classList.add('on');apBtn.textContent='🤖 自動 ON';}
             }
@@ -7694,7 +7694,7 @@ const Game={
     if(this.autoPlay){
       btn.classList.add('on');
       btn.textContent='🤖 自動 ON';
-      this.toast('自動打牌已開啟，AI 將代替你出牌',2000);
+      this.toast('自動打牌已開啟，將自動幫你出牌',2000);
       // 立刻接管：若目前輪到 p0 且處於出牌階段，馬上代打
       const s=this.st;
       if(s&&s.phase==='playing'&&s.turn===0){
@@ -8216,7 +8216,7 @@ const Game={
 
   // 儲存牌局並離開（AI 代打模式）→ 下次可「繼續上局」
   leaveAndSave(){
-    const _msg=this._online?'確定要返回大廳嗎？\n（你的席位將繼續由 AI 接管）':'確定要返回大廳嗎？\n（目前進度將存檔，下次可繼續）';
+    const _msg=this._online?'確定要返回大廳嗎？\n（你的席位將繼續由電腦接管）':'確定要返回大廳嗎？\n（目前進度將存檔，下次可繼續）';
     if(!confirm(_msg)) return;
     if(!this.st||this.st.phase!=='playing'){this.returnLobby();return;}
     // 以 autoPlay=true 存檔，回復後 AI 會接手直到玩家手動關閉
@@ -10511,14 +10511,14 @@ if (Game) {
     this.setSpeed(next);
     this.syncSpeedBtn?.();
     const meta = this._speedMeta[next];
-    this.toast?.(`AI 速度：${meta.label}`, 1500);
+    this.toast?.(`電腦速度：${meta.label}`, 1500);
   };
   Game.syncSpeedBtn = function() {
     const btn = document.getElementById('hud-speed-btn');
     if (!btn) return;
     const meta = this._speedMeta[this.aiSpeed || 'normal'];
     btn.textContent = meta.icon;
-    btn.title = `AI 速度：${meta.label}（點擊切換）`;
+    btn.title = `電腦速度：${meta.label}（點擊切換）`;
     // 兩字以上保持 ic-wide,單字也保持以免按鈕忽寬忽窄跳動
     btn.classList.add('ic-wide');
   };
@@ -11035,7 +11035,7 @@ window.Online = {
         div.className='ol-player-slot filled';
         div.style.background='rgba(52,73,94,.35)';
         div.style.color='rgba(200,200,200,.7)';
-        div.innerHTML=`🤖 ${seats[i]}：${this._aiNames[aiIdx]||'AI'}`;
+        div.innerHTML=`🤖 ${seats[i]}：${this._aiNames[aiIdx]||'電腦'}`;
         if(isHost){
           const rm=document.createElement('button');
           rm.textContent='✕';
@@ -11049,7 +11049,7 @@ window.Online = {
         div.innerHTML=`<span style="flex:1">${seats[i]}：等待中…</span>`;
         if(isHost){
           const ab=document.createElement('button');
-          ab.textContent='＋AI';
+          ab.textContent='＋電腦';
           ab.style.cssText='background:rgba(52,73,94,.5);border:1px solid rgba(125,168,212,.4);border-radius:5px;color:rgba(125,200,255,.8);cursor:pointer;font-size:.72rem;padding:2px 8px;white-space:nowrap';
           ab.onclick=()=>{ this._aiCount=Math.min(this._aiCount+1,4-this.peers.length); this._updatePlayerList(); };
           div.appendChild(ab);
@@ -11073,7 +11073,7 @@ window.Online = {
     if(total<4) return;
     const names=Array.from({length:4},(_,i)=>{
       if(this.peers[i]) return this.peers[i].name;
-      return this._aiNames[i-this.peers.length]||`AI${i}`;
+      return this._aiNames[i-this.peers.length]||`電腦${i}`;
     });
     // Generate dice once so all players see the same result
     const diceVals=[1+~~(Math.random()*6),1+~~(Math.random()*6)];
