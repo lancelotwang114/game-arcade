@@ -6,6 +6,7 @@ Platform.register({
   desc: '3D 立體牌桌，16 張台灣麻將 + 完整台型',
   players: { min: 4, max: 4 },
   online: true, // 連線流程在 iframe 內（自帶 PeerJS 房間），平台只負責帶參數進場
+  ownNet: true, // 不能沿用大廳保留的連線房間（見 Platform.launchOnline）
   _frame: null,
   mount(stage, opts = {}) {
     const f = document.createElement('iframe');

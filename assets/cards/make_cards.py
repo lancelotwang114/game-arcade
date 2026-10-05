@@ -140,8 +140,9 @@ def make_card(rank, suit, st, top):
     if st.get('plain'):  # F 極簡：白底 + 置中大字 rank + 角落 rank/小花色，無點陣無宮廷圖
         card = blank_card(st['bg'])
         corner(card, rank, suit, color)
-        big = text_img(rank, F('arialbd.ttf', 150 if rank != '10' else 120), color)
-        paste_center(card, big, CW * 0.5, CH * 0.5)
+        big = text_img(rank, F('arialbd.ttf', 128 if rank != '10' else 104), color)
+        paste_center(card, big, CW * 0.5, CH * 0.40)
+        paste_center(card, text_img(GLYPH[suit], F('seguisym.ttf', 104), color), CW * 0.5, CH * 0.71)  # 大花色：手機上一眼看出花色
         return card
     if rank in ('J', 'Q', 'K'):
         card = court_crop(rank, top)

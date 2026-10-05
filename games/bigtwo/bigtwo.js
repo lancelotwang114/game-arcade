@@ -527,8 +527,8 @@ if (typeof Platform !== 'undefined') {
       const isGuest = O && !O.isHost;
       this._overModal = Platform.ui.modal({ title: iWin ? '🏆 你是最低分！' : '遊戲結束',
         html: `最低分：<b>${best.name.replace(/[<>&"']/g, '')}</b>（${best.score} 分）`,
-        buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.exit(); } }]
-          : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.exit(); } }] });
+        buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.leave(); } }]
+          : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.leave(); } }] });
     }
     this._prev = { hand: s.handNo, trickLen: trick.length, passSeq: s.passSeq || 0, myN, phase: s.phase, turn: s.turn };
     this._push();
@@ -548,6 +548,7 @@ if (typeof Platform !== 'undefined') {
     id: 'bigtwo', name: '大老二', icon: '🂡',
     desc: '台灣大老二：對子、順子、葫蘆、鐵支炸彈', players: { min: 2, max: 4 },
     online: true,
+    target: B, settings: [{ k: 'TARGET', label: '結束分數', def: 60, min: 10, max: 300, step: 10 }],
     mount(stage, opts) {
       const root = document.createElement('div'); root.id = 'b2-root'; root.className = 'b2-root'; stage.appendChild(root);
       B._root = root; B._human = '你'; B._prev = null; B._overShown = false; B._tl = Platform.fx.timeline(root);

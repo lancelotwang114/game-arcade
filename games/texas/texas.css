@@ -22,6 +22,7 @@
 .tx-info b { font-family: var(--o); color: var(--ink); font-weight: 600; }
 .tx-ibtn { min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--panel); font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.tx-ibtn[hidden] { display: none; }
 .tx-ibtn:focus-visible, .tx-btn:focus-visible, .tx-presets button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* 牌桌 */
@@ -31,11 +32,12 @@
   box-shadow: 0 0 0 2px var(--brass) inset, 0 0 0 8px #1b1009, 0 24px 60px rgba(0,0,0,.6), 0 0 60px rgba(0,0,0,.45) inset; }
 .tx-table::after { content: ''; position: absolute; inset: 12%; border-radius: 999px; border: 1px solid rgba(216,177,90,.14); pointer-events: none; }
 
-/* 對手面板（data-p：1 右 / 2 上 / 3 左） */
-.tx-seat { position: absolute; z-index: 3; transition: opacity .4s, filter .4s; }
-.tx-seat[data-p="2"] { left: 50%; top: 0; transform: translate(-50%, -58%); }
-.tx-seat[data-p="1"] { right: 0; top: 34%; transform: translate(46%, -50%); }
-.tx-seat[data-p="3"] { left: 0; top: 34%; transform: translate(-46%, -50%); }
+/* 對手面板：沿橢圓排列，--c/--s 為座位角度的 cos/sin（texas.js 寫入；--c2 = c²、--sn = min(s,0)） */
+.tx-seat { position: absolute; z-index: 3; transition: opacity .4s, filter .4s;
+  left: calc(50% + 50% * var(--c)); top: calc(50% + 50% * var(--s) - 16% * var(--c2));
+  transform: translate(calc(-50% + 46% * var(--c)), calc(-50% + 8% * var(--sn))); }
+.tx-app.many .tx-pod { min-width: 124px; padding: 4px 12px 4px 4px; gap: 7px; }
+.tx-app.many .tx-pod .tx-ava { width: 40px; }
 .tx-pod { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 16px 6px 6px; border-radius: 99px;
   background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 20px rgba(0,0,0,.45); min-width: 150px; transition: border-color .3s, box-shadow .3s; }
 .tx-nm { font-size: 13px; font-weight: 700; line-height: 1.15; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -62,7 +64,7 @@
 .tx-bubble.k-allin { background: var(--danger); color: #fff; }
 .tx-bubble.pop { animation: txPop .35s cubic-bezier(.2,1.6,.4,1) forwards; }
 @keyframes txPop { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
-.tx-seat[data-p="2"] .tx-bubble { left: calc(100% + 8px); top: 50%; translate: 0 -50%; }
+.tx-seat.top .tx-bubble { left: calc(100% + 8px); top: 50%; translate: 0 -50%; }
 .tx-me .tx-bubble { top: auto; bottom: calc(100% + 6px); }
 
 /* 輪到誰：對手倒數環（約等於電腦思考時間）；你沒有時限，改呼吸環 */
@@ -82,10 +84,8 @@
 .tx-bet { position: absolute; z-index: 2; display: flex; align-items: center; gap: 6px; font: 600 15px var(--o);
   padding: 2px 10px 2px 3px; border-radius: 99px; background: rgba(0,0,0,.35); opacity: 0; }
 .tx-bet.on { animation: txAppear .01s var(--d, 0ms) both; }
-.tx-bet[data-p="2"] { left: 34%; top: 12%; }
-.tx-bet[data-p="1"] { right: 17%; top: 46%; }
-.tx-bet[data-p="3"] { left: 17%; top: 46%; }
-.tx-bet[data-p="0"] { left: 33%; top: 72%; }
+.tx-bet { left: calc(50% + 34% * var(--c)); top: calc(50% + 32% * var(--s)); translate: -50% -50%; }
+.tx-bet[data-p="0"] { left: 33%; top: 72%; translate: none; }
 .tx-chip { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; display: inline-block;
   background: radial-gradient(circle at 38% 32%, #e8463c, #b3322a); border: 2px dashed rgba(255,255,255,.85); box-shadow: 0 1px 3px rgba(0,0,0,.5); }
 .tx-chip.gold { background: radial-gradient(circle at 38% 32%, #f3d98f, #c79a3c); }
@@ -135,10 +135,10 @@
 .tx-me .tx-ava { width: 52px; }
 .tx-me .tx-st { font: 700 24px var(--o); color: var(--accent); line-height: 1; }
 .tx-me .tx-nm { font-size: 12px; color: var(--muted); }
-.tx-str { display: inline-flex; gap: 6px; align-items: baseline; margin-top: 5px; padding: 3px 10px; border-radius: 8px; font-size: 14px; font-weight: 700;
+.tx-str { display: inline-flex; gap: 6px; align-items: baseline; margin-top: 5px; padding: 4px 12px; border-radius: 8px; font-size: 20px; font-weight: 700;
   background: rgba(255,255,255,.07); border: 1px solid var(--line); white-space: nowrap; min-height: 26px; }
 .tx-str:empty { visibility: hidden; }
-.tx-str em { font-style: normal; font-size: 12px; font-weight: 500; color: var(--muted); }
+.tx-str em { font-style: normal; font-size: 16px; font-weight: 600; color: var(--muted); }
 .tx-str.made { background: linear-gradient(180deg, #f3d98f, #d8b15a); color: var(--accent-ink); border-color: transparent; }
 .tx-str.made em { color: #5a4310; }
 .tx-str.up { animation: txUp .7s ease-out; }
@@ -214,13 +214,15 @@
   .tx-nm { max-width: 76px; }
   .tx-hole { left: auto; right: -6px; top: 6px; }
   .tx-hole.show { top: 20px; right: -52px; }
-  .tx-seat[data-p="1"] .tx-hole.show { right: auto; left: -52px; } /* 右側座位亮牌往桌內放，免得超出螢幕 */
-  .tx-seat[data-p="2"] { transform: translate(-50%, -72%); }
-  .tx-seat[data-p="1"] { top: 19%; transform: translate(10%, -50%); }
-  .tx-seat[data-p="3"] { top: 19%; transform: translate(-10%, -50%); }
-  .tx-bet[data-p="2"] { top: 17%; }
-  .tx-bet[data-p="1"] { right: 8%; top: 41%; }
-  .tx-bet[data-p="3"] { left: 8%; top: 41%; }
+  .tx-seat.right .tx-hole.show { right: auto; left: -52px; } /* 右側座位亮牌往桌內放，免得超出螢幕 */
+  /* 直立：對手排上半圈（--pc/--ps），兩側貼螢幕邊 → 座位往桌內收（N=4 與舊版 19% 位置一致） */
+  .tx-seat { left: calc(50% + 50% * var(--pc)); top: calc(50% + 50% * var(--ps) - 31% * var(--pc2));
+    transform: translate(calc(-50% - 40% * var(--pc)), calc(-50% + 22% * var(--psn))); }
+  .tx-bet { left: calc(50% + 30% * var(--pc)); top: calc(50% + 26% * var(--ps) - 12% * var(--pc2)); }
+  .tx-app.many .tx-seat.top .tx-bubble, .tx-app.mid .tx-seat.top .tx-bubble { left: 50%; top: calc(100% + 4px); translate: -50% 0; } /* 窄螢幕上排擠：氣泡放座位下方 */
+  .tx-app.many .tx-pod, .tx-app.mid .tx-pod { width: 78px; min-width: 0; padding: 4px 4px 6px; }
+  .tx-app.many .tx-pod .tx-ava, .tx-app.mid .tx-pod .tx-ava { width: 34px; font-size: 13px; }
+  .tx-app.many .tx-pod .tx-st, .tx-app.mid .tx-pod .tx-st { font-size: 15px; }
   .tx-bet[data-p="0"] { left: 8%; top: 74%; }
   .tx-center { padding: 30% 0 12%; gap: 3cqi; }
   .tx-slot { --w: clamp(42px, 16cqi, 70px); }

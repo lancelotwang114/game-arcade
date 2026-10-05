@@ -428,7 +428,7 @@ body::before {
   overflow: hidden;
   /* updateTblVars JS 設定 transform: scale(...) 跟 left/top */
 }
-#scene { display:block; width:1920px; height:1080px; position:absolute; inset:0; z-index:1; }
+#scene { display:block; width:1920px; height:1080px; position:absolute; inset:0; z-index:1; touch-action:none; /* 拖曳出牌：手機不觸發捲動/下拉重整 */ }
 
 /* ========================= HUD ========================= */
 /* HUD 改 absolute in #tbl-3d，跟著 #tbl-3d 一起等比例縮放 */
@@ -2683,7 +2683,9 @@ function buildWall3D(side, deckLen, wallBreak, wallTailDrawn, dealtStacks = 32) 
     const cnt = physToStackCnt(phys);
     for (let layer = 0; layer < cnt; layer++) {
       const tile = makeWallTile3D();
-      const x = -len/2 + i*(TW+GAP) + TW/2;
+      // 東/西牆的 WALL_ROT_DEG（-89.5/87.5）讓本地 +x 朝南/朝北，與逆時針編號相反 → 位置倒排，牌墩才會沿同一方向連續被拿
+      const xi = (side==='east'||side==='west') ? seg.count-1-i : i;
+      const x = -len/2 + xi*(TW+GAP) + TW/2;
       tile.position.set(x, TD/2 + layer*(TD+0.015), 0);
       tile.userData.linear = (headPhys - phys + TOTAL) % TOTAL; // 發牌動畫用：找出被拿走的疊
       group.add(tile);
@@ -2726,7 +2728,7 @@ function buildHand3D(side, tiles, candidateIds) {
     const tileId = entry.tileId;
     const isCandidate = candidateIds && tileId !== undefined && candidateIds.has(tileId);
     const isDrawn = !!entry.isDrawn;
-    const mesh = makeTile3D(texKey, isCandidate);
+    const mesh = makeTile3D(texKey, isCandidate && !Game._riichiCands); // 聽牌選牌只浮起＋頭上張數，不染金色
     mesh.rotation.x = tiltX;
     const xExtra = isDrawn ? DRAWN_GAP : 0;
     const x = -len/2 + i*(TW+GAP) + TW/2 + xExtra;
@@ -4993,7 +4995,6 @@ const Game={
         // Chain flower: if drawn tile is also a flower, keep drawing from tail
         while(t&&t.fl){
           s.flowers[p].push(t);
-          s.pending[p]++; // need another replacement
           this.log(`${s.names[p]} 連補花: ${t.n}`);
           t=s.deck.pop(); s.wallTailDrawn=(s.wallTailDrawn||0)+1;
         }
@@ -5098,7 +5099,8 @@ const Game={
       s.hands[p]=[...s.hands[p].filter(x=>x.fl),...nonFlower.slice(0,expectedBeforeDraw)];
     }
     const preFlowerCount=s.flowers[p].length;
-    let t=s.deck.shift(); // 正常摸牌：從頭端
+    // 正常摸牌從頭端；槓後補牌從尾端（與補花同端）
+    let t;if(s._kongWin){t=s.deck.pop();if(t)s.wallTailDrawn=(s.wallTailDrawn||0)+1;}else t=s.deck.shift();
     while(t){if(!t.fl)break;s.flowers[p].push(t);this.log(`${s.names[p]} 槓上補花: ${t.n}`);Snd.play(520,.12,'sine',.14);s.wallTailDrawn=(s.wallTailDrawn||0)+1;this.render();t=s.deck.pop();} // 槓上補花：從尾端
     if(this._checkFlowerWin(p))return; // 八仙/七搶一：花出齊即判胡
     if(!t){this.endDraw();return;}
@@ -6693,6 +6695,10 @@ const Game={
     return '東南西北'[((p-(this.st?.dealer||0))%4+4)%4]+'家';
   },
   speakTing(p){
+    // 宣告聽牌時 confirmRiichi 與出牌後 checkTenpai（及連線回傳）都會呼叫；同一家 4 秒內只演一次
+    const now=Date.now();this._tingAt=this._tingAt||[];
+    if(now-(this._tingAt[p]||0)<4000)return;
+    this._tingAt[p]=now;
     this._speakMj(`${this._seatName(p)}聽牌`);
     this._meldFx('tenpai',p,'聽牌'); // 聽牌瞬間：該家旁落下金色「聽」字印章（持續提示由 .pp.tenpai 金框負責）
   },
@@ -7097,7 +7103,7 @@ const Game={
     if(typeof render3D==='function') render3D();
   },
 
-  onTile(tile){
+  onTile(tile,direct){ // direct：拖曳出牌，跳過「點兩下」確認
     const s=this.st;
     if(!s||s.phase!=='playing')return;
     // v1.6.8【防禦】飛牌動畫 230ms 期間 _isDiscarding=true，此窗口內拒絕任何點擊防雙打
@@ -7140,7 +7146,7 @@ const Game={
     // C5: 打牌確認（雙擊模式）— 首次點擊選中，再次點擊打出
     const already=ht0.querySelector('.t.sel');
     const clickedEl=ht0.querySelector(`.t[data-id="${tile.id}"]`);
-    if(this.settings.confirmDiscard!==false){
+    if(!direct&&this.settings.confirmDiscard!==false){
       // 有已選中的牌：若點的是同一張 → 打出，否則換選
       if(already&&already===clickedEl){
         ht0.querySelectorAll('.t').forEach(e=>e.classList.remove('sel'));
@@ -7793,7 +7799,7 @@ const Game={
 
   // 聽牌選牌（方案 A）：不開中央面板，直接在 3D 手牌上標示
   //   每張候選牌頭上小標「N張」（打它之後聽幾張；最多＝金、其餘綠、0＝紅）；
-  //   滑到（手機：第一次點）某張 → 牌上方卡片列出聽哪些牌、各剩幾張；點該牌＝宣告聽牌並打出
+  //   點（或往上拖）候選牌＝宣告聽牌並打出；上方只留「取消」
   //   位置由 tick 每幀呼叫 _placeRiichiTags 跟著 3D 牌走。容器沿用 #riichi-select-panel，其他清除路徑不用改
   _showRiichiPanel(candidates, s){
     document.getElementById('riichi-select-panel')?.remove();
@@ -7815,8 +7821,7 @@ const Game={
     // 上方提示列＋取消（取代原本蓋在手牌上的「取消聽牌」按鈕）
     const bar=document.createElement('div');bar.className='rq-bar';
     bar.style.cssText='position:absolute;transform:translate(-50%,-100%);display:flex;align-items:center;gap:10px;white-space:nowrap;'+
-      'background:rgba(4,12,6,.92);border:1.5px solid #2ecc71;border-radius:999px;padding:5px 6px 5px 14px;color:#e8f5ec;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.6)';
-    bar.innerHTML='<span><b style="color:#2ecc71">聽牌</b>：點浮起的牌打出　<span style="opacity:.7">數字＝打它之後聽幾張</span></span>';
+      'background:rgba(4,12,6,.92);border:1.5px solid #2ecc71;border-radius:999px;padding:5px 6px;color:#e8f5ec;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.6)';
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent='取消';
     cancel.style.cssText='pointer-events:auto;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:999px;padding:3px 12px;font:700 12px "Noto Sans TC",sans-serif';
     cancel.onclick=()=>this.cancelRiichiSelect();
@@ -7827,7 +7832,6 @@ const Game={
         'font-weight:900;font-size:12px;padding:1px 6px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.6)';
       ov.appendChild(b);
     }));
-    const card=document.createElement('div');card.className='rq-card';card.style.display='none';ov.appendChild(card);
     document.body.appendChild(ov);
   },
   // tick 每幀（render 之後）呼叫：標籤／卡片／提示列跟著浮起中的 3D 牌移動
@@ -7840,30 +7844,6 @@ const Game={
     ov.querySelectorAll('.rq-tag').forEach(b=>{const rc=rectOf(+b.dataset.id);if(!rc)return;b.style.left=rc.cx+'px';b.style.top=(rc.t-4)+'px';});
     const bar=ov.querySelector('.rq-bar');
     if(bar&&l<r){bar.style.left=((l+r)/2)+'px';bar.style.top=(minTop-34)+'px';}
-    const card=ov.querySelector('.rq-card'),hid=this._riichiHoverId;
-    const row=hid!=null&&this._riichiRows.find(x=>x.ids.includes(hid));
-    if(!row){card.style.display='none';card.dataset.k='';return;}
-    if(card.dataset.k!==row.tile.s+row.tile.v){
-      card.dataset.k=row.tile.s+row.tile.v;
-      card.innerHTML='';
-      card.style.cssText=`position:absolute;transform:translate(-50%,-100%);background:rgba(4,12,6,.97);border:1.5px solid ${row.color};`+
-        'border-radius:10px;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.7);z-index:1';
-      const h=document.createElement('div');h.style.cssText='color:#fff;font-weight:700;font-size:13px;margin-bottom:6px;text-align:center;white-space:nowrap';
-      h.textContent=`打這張 → 聽 ${row.total} 張`+(row.best?'（最多）':'');card.appendChild(h);
-      const w=document.createElement('div');w.style.cssText='display:flex;gap:8px;justify-content:center';
-      row.waits.forEach(({wt,rem})=>{
-        const en=document.createElement('div');en.style.cssText='display:flex;flex-direction:column;align-items:center;gap:2px';
-        const te=mkTile({...wt,id:88888},'');te.style.cssText+='zoom:.5;flex-shrink:0;'; // tooltip 牌：全尺寸 mkTile 再 zoom（見 CLAUDE.md）
-        const c=document.createElement('span');c.style.cssText=`font:700 12px "Noto Sans TC",sans-serif;color:${rem===0?'#e74c3c':rem<=2?'#e67e22':'#2ecc71'}`;c.textContent=`剩${rem}`;
-        en.appendChild(te);en.appendChild(c);w.appendChild(en);
-      });
-      card.appendChild(w);
-      const tip=document.createElement('div');tip.style.cssText='color:rgba(255,255,255,.6);font-size:11px;text-align:center;margin-top:6px;white-space:nowrap';
-      tip.textContent=_lastPtrType==='touch'?'再點一次這張＝宣告聽牌並打出':'點這張牌＝宣告聽牌並打出';card.appendChild(tip);
-      const ar=document.createElement('div');ar.style.cssText=`position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);border:8px solid transparent;border-bottom:0;border-top-color:${row.color}`;card.appendChild(ar);
-    }
-    const rc=rectOf(hid);
-    if(rc){card.style.display='block';card.style.left=rc.cx+'px';card.style.top=(rc.t-30)+'px';}
   },
   cancelRiichiSelect(){
     this._endRiichiSelect();
@@ -8349,12 +8329,12 @@ const Game={
     const smap={pong:()=>Snd.pong(),chi:()=>Snd.chi(),kong:()=>Snd.kong(),tenpai:()=>Snd.tenpai()};
     if(smap[type])smap[type]();
     // Voice announcement for player actions（胡／自摸改由 speakWin 播「東家胡牌」，避免多句互相切斷）
-    const sayMap={pong:'碰',chi:'吃',kong:'槓',tenpai:'聽牌'};
+    const sayMap={pong:'碰',chi:'吃',kong:'槓'}; // 聽牌語音＋印章只由 speakTing 播，避免出現兩次
     if(sayMap[type]) setTimeout(()=>Snd.say(sayMap[type]),80);
     if(isWin){
       const slamAt=this._winFx(type,p,sub,payer,big); // 胡／自摸音效在演出停格後才播（見 _winFx）
       setTimeout(()=>this.speakWin(p,type==='zimo'),(slamAt||250)+300); // 語音對齊大字砸下
-    } else this._meldFx(type,p,sub);
+    } else if(type!=='tenpai') this._meldFx(type,p,sub);
     // 連線：房主廣播給客戶端，客戶端各自轉成本機視角播放（房主視角 p/payer = 絕對座位）
     if(this._online&&this._isHost&&type!=='tenpai'&&typeof MahjongNetwork!=='undefined'){
       MahjongNetwork.broadcast({type:'ann',kind:type,p,sub,payer,big});
@@ -8813,8 +8793,42 @@ const pointer   = new THREE.Vector2();
 let _hoveredMesh = null;
 
 function setupRaycast() {
-  canvas.addEventListener('pointerdown', (e) => { _lastPtrType = e.pointerType; });
+  // 拖曳出牌：按住手牌往牌桌中央拖過門檻後放開＝直接打出；拖不夠遠就彈回，當一般點擊處理
+  const hitHand = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    pointer.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+    pointer.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(_p0HandMeshes.map(m => m.mesh), false);
+    return hits.length ? _p0HandMeshes.find(m => m.mesh === hits[0].object) : null;
+  };
+  const DRAG_PX = 50;
+  let drag = null, eatClickUntil = 0;
+  canvas.addEventListener('pointerdown', (e) => {
+    _lastPtrType = e.pointerType; drag = null;
+    if (!Game || !Game.st || Game.st.phase !== 'playing' || Game.st.turn !== 0 || Game._isDiscarding || Game._candidateMap) return;
+    const entry = hitHand(e);
+    if (!entry || (Game._riichiCands && !Game._riichiCands.has(entry.tileId))) return;
+    drag = { entry, y0: e.clientY, z0: entry.mesh.position.z, pid: e.pointerId };
+    try { canvas.setPointerCapture(e.pointerId); } catch {} // 拖出畫布外仍收得到 pointerup
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.pid) return;
+    drag.dy = Math.max(0, drag.y0 - e.clientY);
+    drag.entry.mesh.position.z = drag.z0 - drag.dy * 0.012; // 往桌心推（y 由浮動動畫管，不碰）
+  });
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.pid) return;
+    const d = drag; drag = null;
+    d.entry.mesh.position.z = d.z0;
+    if (e.type !== 'pointerup' || !(d.dy > DRAG_PX)) return;
+    eatClickUntil = performance.now() + 400; // 吃掉隨後的 click，避免再選一次
+    if (Game._riichiCands) Game.confirmRiichi(d.entry.tile); else Game.onTile(d.entry.tile, true);
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
   canvas.addEventListener('click', (e) => {
+    if (performance.now() < eatClickUntil) return;
     if (!Game || !Game.st || Game.st.phase !== 'playing' || Game.st.turn !== 0) return;
     if (Game._isDiscarding) return;
 
@@ -8838,7 +8852,6 @@ function setupRaycast() {
     if (Game._riichiCands) {
       if (!Game._riichiCands.has(entry.tileId)) return;
       // 觸控沒有滑入：第一次點先顯示該張的聽牌卡片，再點同一張才宣告
-      if (_lastPtrType === 'touch' && Game._riichiHoverId !== entry.tileId) { Game._riichiHoverId = entry.tileId; return; }
       Game.confirmRiichi(entry.tile);
       return;
     }

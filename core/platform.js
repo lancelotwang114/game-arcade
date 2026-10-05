@@ -13,7 +13,8 @@ const Platform = {
   launch(id, opts = {}) {
     const g = this.games.find(x => x.id === id);
     if (!g) return;
-    this.exit();
+    this.exit(opts.keepNet);
+    if (!opts.join) this.applyCfg(id, this.cfg(id)); // 賓客的設定由房主連線送來（net.js 'cfg'）
     const lobby = document.getElementById('lobby');
     const stage = document.getElementById('stage');
     const back  = document.getElementById('back-btn');
@@ -29,22 +30,69 @@ const Platform = {
     const g = this.games.find(x => x.id === id);
     if (!g) return;
     if (!g.online) { this.toast && this.toast('此遊戲暫不支援連線'); return; }
+    const n = this.net;
+    if (!join && n && n.peer && n.isHost) { // 房主帶著原房間的賓客換遊戲
+      if (g.ownNet) { this.toast('此遊戲使用獨立連線房間，請先關閉目前房間'); return; }
+      this.launch(id, { online: true, keepNet: true });
+      setTimeout(() => n.broadcast('switch', { game: id }), 300); // 等新遊戲掛好連線處理器，賓客的 rejoin 才接得住
+      return;
+    }
     this.launch(id, { online: true, join: join || null });
   },
+  // 回大廳：連線房主且有賓客 → 保留房間，賓客在大廳等房主選下一款
+  leave() {
+    const n = this.net;
+    if (n && n.peer && n.isHost && n.conns.length) { n.broadcast('hold', {}); this.exit(true); }
+    else this.exit();
+  },
 
-  exit() {
+  exit(keepNet) {
     if (this._active) {
       try { this._active.unmount && this._active.unmount(); }
       catch (e) { console.error('unmount failed', e); }
       this._active = null;
     }
-    if (this.net && this.net.peer) this.net.reset();
+    if (this.net && this.net.peer) { if (keepNet) this.net.handlers = {}; else this.net.reset(); }
     const lobby = document.getElementById('lobby');
     const stage = document.getElementById('stage');
     const back  = document.getElementById('back-btn');
     if (stage) { stage.style.display = 'none'; stage.innerHTML = ''; }
     if (back)  back.style.display = 'none';
     if (lobby) lobby.style.display = '';
+    renderRoomBar();
+  },
+
+  // ---- 房內設定：遊戲 register 時給 settings: [{k, label, def, min, max, step}] 與 target（套用到的遊戲物件） ----
+  _clampCfg(g, src) {
+    const o = {};
+    (g.settings || []).forEach(f => {
+      let v = Math.round(+(src || {})[f.k] / (f.step || 1)) * (f.step || 1);
+      if (!Number.isFinite(v)) v = f.def;
+      o[f.k] = Math.max(f.min, Math.min(f.max, v));
+    });
+    return o;
+  },
+  cfg(id) { const g = this.games.find(x => x.id === id); return g ? this._clampCfg(g, this.store.get('arcade_cfg_' + id, {})) : {}; },
+  applyCfg(id, cfg) { const g = this.games.find(x => x.id === id); if (g && g.target) Object.assign(g.target, this._clampCfg(g, cfg)); },
+  // 設定對話框：暱稱 + 該遊戲設定；存檔後呼叫 after()
+  editCfg(id, after) {
+    const g = this.games.find(x => x.id === id); if (!g) return;
+    const cur = this.cfg(id), esc = t => String(t).replace(/[<>&"'`]/g, c => `&#${c.charCodeAt(0)};`);
+    const row = (k, label, v, a) => `<label class="cfg-row"><span>${label}</span><input data-k="${k}" ${a} value="${esc(v)}"></label>`;
+    const m = this.ui.modal({
+      title: `${g.name} — 設定`,
+      html: `<div class="cfg-form">${row('_name', '暱稱', this.store.get('arcade_name', ''), 'type="text" maxlength="12" placeholder="玩家"')}`
+        + (g.settings || []).map(f => row(f.k, f.label, cur[f.k], `type="number" inputmode="numeric" min="${f.min}" max="${f.max}" step="${f.step || 1}"`)).join('') + '</div>',
+      buttons: [
+        { label: '儲存', primary: true, onClick: close => {
+          const v = {}; m.el.querySelectorAll('input[data-k]').forEach(i => { v[i.dataset.k] = i.value; });
+          this.store.set('arcade_name', String(v._name || '').replace(/[<>&"'`]/g, '').trim().slice(0, 12));
+          this.store.set('arcade_cfg_' + id, this._clampCfg(g, v));
+          close(); after && after();
+        } },
+        { label: '取消' },
+      ],
+    });
   },
 
   // localStorage JSON 包裝
@@ -71,19 +119,37 @@ function renderLobby() {
       <div class="gc-btns">
         <button class="gc-go" aria-label="單機遊玩 ${g.name}">單機</button>
         ${g.online ? `<button class="gc-online" aria-label="連線遊玩 ${g.name}"><span aria-hidden="true">🌐</span> 連線</button>` : ''}
+        ${g.settings ? `<button class="gc-cfg" aria-label="${g.name} 設定"><span aria-hidden="true">⚙</span></button>` : ''}
       </div>`;
     card.querySelector('.gc-go').onclick = () => Platform.launch(g.id);
     const ob = card.querySelector('.gc-online');
     if (ob) ob.onclick = () => Platform.launchOnline(g.id);
+    const cb = card.querySelector('.gc-cfg');
+    if (cb) cb.onclick = () => Platform.editCfg(g.id);
     grid.appendChild(card);
   });
+  renderRoomBar();
 }
 Platform._onChange = renderLobby;
+
+// 大廳的連線房間列：房主保留房間回大廳時，選任一遊戲的「連線」就帶賓客一起進；賓客在此等待
+function renderRoomBar() {
+  const lobby = document.getElementById('lobby'), n = Platform.net;
+  if (!lobby) return;
+  let bar = document.getElementById('room-bar');
+  const on = n && n.peer && (n.isHost ? n.conns.length : n.conns.length && n.hostId);
+  if (!on) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'room-bar'; bar.setAttribute('aria-live', 'polite'); lobby.insertBefore(bar, document.getElementById('game-grid')); }
+  bar.innerHTML = n.isHost
+    ? `<span>🌐 房間 <b>${n.roomId || ''}</b> · ${n.conns.length} 位賓客等你選遊戲（按「連線」大家一起進）</span><button class="btn">關閉房間</button>`
+    : `<span>🌐 等待房主選擇下一款遊戲…</span><button class="btn">離開房間</button>`;
+  bar.querySelector('button').onclick = () => { n.reset(); renderRoomBar(); };
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   renderLobby();
   const back = document.getElementById('back-btn');
-  if (back) back.onclick = () => Platform.exit();
+  if (back) back.onclick = () => Platform.leave();
   // 由邀請連結進入 → 自動以賓客加入
   if (Platform._pendingJoin) {
     const j = Platform._pendingJoin; Platform._pendingJoin = null;

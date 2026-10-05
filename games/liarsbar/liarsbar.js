@@ -203,7 +203,7 @@ const LiarsBar = {
       html: `最後生還者：<b>${winner ? winner.name : '無'}</b>`,
       buttons: [
         { label: '再來一局', primary: true, onClick: (close) => { close(); this.restart(); } },
-        { label: '回大廳', onClick: (close) => { close(); Platform.exit(); } },
+        { label: '回大廳', onClick: (close) => { close(); Platform.leave(); } },
       ],
     });
   },
@@ -346,7 +346,7 @@ if (typeof Platform !== 'undefined') {
     this._overModal = Platform.ui.modal({
       title: meWin ? '🏆 你贏了！' : '☠️ 遊戲結束',
       html: `最後生還者：<b>${winner ? winner.name : '無'}</b>`,
-      buttons: [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.exit(); } }],
+      buttons: [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.leave(); } }],
     });
   };
 
@@ -644,6 +644,7 @@ if (typeof Platform !== 'undefined') {
     id: 'liarsbar', name: '騙子酒吧', icon: '🍺',
     desc: '吹牛、抓謊、左輪淘汰', players: { min: 2, max: 4 },
     online: true,
+    settings: [], // 只有暱稱
     mount(stage, opts) {
       LiarsBar._stage = stage;
       const root = document.createElement('div');

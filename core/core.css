@@ -117,3 +117,17 @@ body {
 .net-list { list-style: none; padding: 0; margin: 0 0 12px; text-align: left; display: inline-block; }
 .net-list li { padding: 5px 0; font-size: 15px; }
 .net-hint { color: var(--muted); font-size: 13px; margin: 8px 0 18px; }
+
+/* 房內設定（大廳 ⚙ / 開房面板）與大廳連線房間列 */
+.gc-btns .gc-cfg { flex: 0 0 44px; min-height: 44px; background: var(--bg2); color: var(--gold2); font-size: 18px; }
+.cfg-form { display: grid; gap: 10px; text-align: left; min-width: min(300px, 80vw); }
+.cfg-row { display: grid; grid-template-columns: 6em 1fr; align-items: center; gap: 10px; font-size: 15px; }
+.cfg-row input { min-height: 44px; background: rgba(0,0,0,.4); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 8px; padding: 6px 10px; font-size: 16px; font-family: inherit; }
+.cfg-row input:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.net-cfg { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+.net-cfg b { color: var(--gold2); }
+#room-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin: 0 0 3vh; padding: 10px 16px;
+  border: 1px solid var(--gold); border-radius: 12px; background: rgba(0,0,0,.35); color: var(--ink); font-size: 14px; max-width: 760px; }
+#room-bar b { color: var(--gold2); letter-spacing: .1em; }
+#room-bar .btn { min-height: 44px; }

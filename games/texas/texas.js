@@ -1,4 +1,4 @@
-/* 德州撲克 Texas Hold'em — 單機 + AI（4 人桌，籌碼 1000，盲注 10/20）
+/* 德州撲克 Texas Hold'em — 單機 + 電腦（2~8 人桌；人數/起始籌碼/大盲由房內設定，預設 4 人、1000、10/20）
    流程：preflop→flop→turn→river→showdown。動作 fold/check/call/raise/all-in。
    評牌：純函式 7 取 5。底池含 all-in 邊池。 */
 const Texas = {
@@ -82,7 +82,8 @@ const Texas = {
       let amt = 0;
       players.forEach(p => { amt += Math.min(Math.max(p.totalInvested - prev, 0), lv - prev); });
       const elig = players.map((p, i) => i).filter(i => players[i].totalInvested >= lv && !players[i].folded);
-      if (amt > 0) pots.push({ amt, elig });
+      // 這層只有已蓋牌者投入（例：蓋牌者下得比所有存活 all-in 者還多）→ 死錢併入上一個池，不能憑空消失
+      if (amt > 0) { if (elig.length || !pots.length) pots.push({ amt, elig }); else pots[pots.length - 1].amt += amt; }
       prev = lv;
     }
     return pots;
@@ -92,17 +93,28 @@ const Texas = {
   makeDeck() { const d = []; for (const s of ['s', 'h', 'd', 'c']) for (const r of this.RANKS) d.push({ r, s }); return d; },
 
   // ---------- 對局狀態 ----------
-  st: null, _timers: [], _root: null, SB: 10, BB: 20, START: 1000,
+  st: null, _timers: [], _root: null, BB: 20, START: 1000, SEATS: 4, MAX_SEATS: 8,
+  get SB() { return Math.max(1, Math.floor(this.BB / 2)); },
+  AI_NAMES: ['', '阿傑', '小琪', '老王', '美玲', '大雄', '阿凱', '小芳'],
+  _mkPlayer(i, name, isAI) {
+    return { id: i, name: name || this.AI_NAMES[i] || ('電腦' + i), isAI, chips: this.START,
+      hole: [], bet: 0, totalInvested: 0, folded: false, allin: false, acted: false, style: ['balanced', 'attack', 'defense'][i % 3], last: '' };
+  },
 
   newMatch(human = '你') {
-    const names = [human, '阿傑', '小琪', '老王'];
-    const players = names.map((nm, i) => ({
-      id: i, name: nm, isAI: i !== 0, chips: this.START,
-      hole: [], bet: 0, totalInvested: 0, folded: false, allin: false, acted: false,
-      style: ['balanced', 'attack', 'defense'][i % 3], last: '',
-    }));
+    const players = [...Array(this.SEATS).keys()].map(i => this._mkPlayer(i, i ? '' : human, i !== 0));
     this.st = { players, board: [], deck: [], dealer: 0, street: 'idle', currentBet: 0, toAct: -1, _seat: -1, log: [], pots: [], handNo: 0 };
     this.newHand();
+  },
+  // 中途加座位（房主加電腦 / 新賓客沒有電腦座位可接手）：本手先蓋牌觀戰，下一手起正常發牌
+  _addSeat(name, isAI) {
+    const s = this.st, i = s.players.length;
+    if (i >= this.MAX_SEATS) return -1;
+    const p = this._mkPlayer(i, name, isAI);
+    if (s.street !== 'idle') { p.folded = true; p.last = '下一手加入'; }
+    s.players.push(p);
+    this.log(`${p.name} 入座`);
+    return i;
   },
 
   newHand() {
@@ -260,7 +272,7 @@ const Texas = {
   },
   aiAct(i) {
     const s = this.st;
-    if (!s || s.toAct !== i) return;
+    if (!s || s.toAct !== i || !s.players[i].isAI) return; // 思考中途被賓客接手 → 交給真人
     const p = s.players[i], L = this.legal(i);
     const str = this._strength(i);
     const aggr = { attack: 0.18, balanced: 0.08, defense: -0.02 }[p.style] + (Math.random() - 0.5) * 0.12;
@@ -296,7 +308,7 @@ const Texas = {
       html: `籌碼王：<b>${winner.name}</b>（${winner.chips}）`,
       buttons: [
         { label: '再來', primary: true, onClick: c => { c(); this.restart(); } },
-        { label: '回大廳', onClick: c => { c(); Platform.exit(); } },
+        { label: '回大廳', onClick: c => { c(); Platform.leave(); } },
       ],
     });
   },
@@ -341,6 +353,9 @@ if (typeof module !== 'undefined' && require.main === module) {
   assert.strictEqual(pots[0].elig.length, 3, '主池三人有份');
   assert.strictEqual(pots[1].amt, 400, '邊池 200×2');
   assert.deepStrictEqual(pots[1].elig, [1, 2], '邊池只 B C');
+  // 死錢：A 投 10 後蓋牌，B/C/D 各 all-in 1 → 9 不能消失，併入主池
+  const dead = T.buildPots([{ totalInvested: 10, folded: true }, { totalInvested: 1, folded: false }, { totalInvested: 1, folded: false }, { totalInvested: 1, folded: false }]);
+  assert.deepStrictEqual(dead.map(p => p.amt), [13], '蓋牌者多投的死錢併入主池');
   // 規則手算樣例：3 人翻牌圈，全人類（不觸發 AI），每人 1000
   const mk = chips => chips.map((c, i) => ({ id: i, name: 'P' + i, isAI: false, chips: c, hole: [], bet: 0, totalInvested: 0, folded: false, allin: false, acted: false, last: '' }));
   const flop = chips => { T.st = { players: mk(chips), board: [], deck: [], dealer: 0, street: 'flop', currentBet: 0, lastRaise: T.BB, toAct: 0, _seat: 0, log: [], pots: [], handNo: 1 }; };
@@ -394,13 +409,10 @@ if (typeof Platform !== 'undefined') {
     for (const seat in O.peerOf) Platform.net.sendTo(O.peerOf[seat], 'state', { st: this._redact(+seat), seat: +seat });
   };
   Texas._newMatchOnline = function () {
-    const names = this.O.names, styles = ['balanced', 'attack', 'defense'];
-    const players = [0, 1, 2, 3].map(i => {
-      const occupied = i === 0 || names[i] != null;
-      return {
-        id: i, name: names[i] || (['', '阿傑', '小琪', '老王'][i]), isAI: !occupied, _remote: occupied && i !== 0,
-        chips: this.START, hole: [], bet: 0, totalInvested: 0, folded: false, allin: false, acted: false, style: styles[i % 3], last: '',
-      };
+    const names = this.O.names;
+    const players = names.map((nm, i) => {
+      const occupied = i === 0 || nm != null;
+      return Object.assign(this._mkPlayer(i, nm, !occupied), { _remote: occupied && i !== 0 });
     });
     this.st = { players, board: [], deck: [], dealer: 0, street: 'idle', currentBet: 0, toAct: -1, _seat: -1, log: [], pots: [], handNo: 0 };
     this._overShown = false;
@@ -413,8 +425,8 @@ if (typeof Platform !== 'undefined') {
   };
   Texas._setupHostNet = function () {
     Platform.net.on('_open', (d, from) => {
-      if (this.O.started) { Platform.net.sendTo(from, 'full', {}); return; }
-      let seat = -1; for (let i = 1; i < 4; i++) if (!this.O.peerOf[i]) { seat = i; break; }
+      if (this.O.started) { this._joinMidGame(d, from); return; }
+      let seat = -1; for (let i = 1; i < this.O.names.length; i++) if (!this.O.peerOf[i]) { seat = i; break; }
       if (seat < 0) { Platform.net.sendTo(from, 'full', {}); return; }
       this.O.seatOf[from] = seat; this.O.peerOf[seat] = from; this.O.names[seat] = d.name || ('賓客' + seat);
       Platform.net.sendTo(from, 'welcome', { seat });
@@ -442,6 +454,19 @@ if (typeof Platform !== 'undefined') {
       this.apply(seat, kind, amount);
     });
   };
+  // 開局後才連進來的賓客：接手一個還有籌碼的電腦座位；沒有就加新座位（本手觀戰，下一手入局）
+  Texas._joinMidGame = function (d, from) {
+    const s = this.st, nm = d.name || '賓客';
+    if (!s || s.street === 'over') { Platform.net.sendTo(from, 'full', {}); return; }
+    let seat = s.players.findIndex((p, i) => i && p.isAI && p.chips > 0);
+    if (seat >= 0) { s.players[seat].isAI = false; s.players[seat].name = nm; this.log(`${nm} 接手座位 ${seat + 1}`); }
+    else seat = this._addSeat(nm, false);
+    if (seat < 0) { Platform.net.sendTo(from, 'full', {}); return; }
+    s.players[seat]._remote = true;
+    this.O.seatOf[from] = seat; this.O.peerOf[seat] = from; this.O.names[seat] = nm;
+    Platform.net.sendTo(from, 'start', { seat });
+    this.render(); // render 尾端 _push 會把畫面送給新賓客
+  };
   Texas._setupGuestNet = function () {
     Platform.net.on('welcome', d => { this.O.mySeat = d.seat; this._renderRoom(); });
     Platform.net.on('lobby', d => { this.O.names = d.names; this._renderRoom(); });
@@ -457,7 +482,7 @@ if (typeof Platform !== 'undefined') {
   };
   Texas._startOnline = function (opts) {
     const name = Platform.store.get('arcade_name', '') || (opts.join ? '賓客' : '房主');
-    this.O = { isHost: !opts.join, mySeat: opts.join ? -1 : 0, seatOf: {}, peerOf: {}, names: [null, null, null, null], started: false };
+    this.O = { isHost: !opts.join, mySeat: opts.join ? -1 : 0, seatOf: {}, peerOf: {}, names: Array(this.SEATS).fill(null), started: false };
     this._renderRoom();
     Platform.net.init(name).then(() => {
       if (this.O.isHost) { Platform.net.createRoom(); this.O.names[0] = name; this._setupHostNet(); this._renderRoom(); }
@@ -466,6 +491,13 @@ if (typeof Platform !== 'undefined') {
   };
   Texas._renderRoom = function () {
     if (!this._root || !this.O || this.O.started) return;
+    if (this.O.isHost) { // 房內設定改了人數：座位表跟著伸縮（不砍掉已入座的賓客）
+      const nm = this.O.names, need = Math.max(this.SEATS, 1 + Math.max(0, ...Object.keys(this.O.peerOf).map(Number)));
+      if (nm.length !== need) {
+        while (nm.length < need) nm.push(null); nm.length = need;
+        if (Platform.net.conns.length) Platform.net.broadcast('lobby', { names: nm });
+      }
+    }
     Platform.net.renderRoom(this._root, this.O, '🃏 德州撲克', () => this._hostStart());
   };
   Texas._maybeOver = function () {
@@ -476,7 +508,7 @@ if (typeof Platform !== 'undefined') {
     this._overModal = Platform.ui.modal({
       title: meWin ? '🏆 你贏得全場！' : '💸 遊戲結束',
       html: `籌碼王：<b>${winner.name}</b>（${winner.chips}）`,
-      buttons: [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.exit(); } }],
+      buttons: [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.leave(); } }],
     });
   };
 
@@ -533,20 +565,36 @@ if (typeof Platform !== 'undefined') {
   };
 
   // ---------- 骨架 ----------
-  Texas._build = function () {
+  // 座位沿橢圓排：k=0 你（正下方），k 增加 → 右 → 上 → 左（N=4 時與舊版 右/上/左 位置一致）
+  const geo = (k, N) => { const a = Math.PI / 2 - k * 2 * Math.PI / N; return { c: Math.cos(a), s: Math.sin(a) }; };
+  // 直立（手機）桌子瘦高：對手排上半圈（右 → 上 → 左），免得兩側座位壓到公共牌；5 人以上弧度放寬到 200° 分散開
+  const pgeo = (k, N) => {
+    const span = N > 4 ? 200 : 180, a = N > 2 ? ((span - 180) / 2 - (k - 1) / (N - 2) * span) * Math.PI / 180 : -Math.PI / 2;
+    return { c: Math.cos(a), s: Math.sin(a) };
+  };
+  const vars = (k, N) => { const g = geo(k, N), p = k ? pgeo(k, N) : g, f = v => v.toFixed(3);
+    return `--c:${f(g.c)};--s:${f(g.s)};--c2:${f(g.c * g.c)};--sn:${f(Math.min(g.s, 0))};--pc:${f(p.c)};--ps:${f(p.s)};--pc2:${f(p.c * p.c)};--psn:${f(Math.min(p.s, 0))}`; };
+  Texas._build = function (N) {
     const root = this._root;
-    const seat = p => `<div class="tx-seat" data-p="${p}"><div class="tx-pod"><div class="tx-ava"><span class="tx-ini"></span><span class="tx-dbtn" hidden>D</span></div>
+    const seat = p => {
+      const { c, s } = geo(p, N), pc = pgeo(p, N).c; // 實際位置由 texas.css 依直/橫向計算
+      return `<div class="tx-seat${s < -.7 ? ' top' : ''}${pc > .3 ? ' right' : ''}" data-p="${p}" style="${vars(p, N)}"><div class="tx-pod"><div class="tx-ava"><span class="tx-ini"></span><span class="tx-dbtn" hidden>D</span></div>
       <div><div class="tx-nm"></div><div class="tx-st"></div></div><div class="tx-hole"></div></div><span class="tx-bubble"></span></div>`;
-    root.innerHTML = `<div class="tx-app">
+    };
+    const bet = p => `<div class="tx-bet" data-p="${p}" style="${vars(p, N)}"><span class="tx-chip"></span><b></b></div>`;
+    const ks = [...Array(N).keys()];
+    root.innerHTML = `<div class="tx-app${N > 6 ? ' many' : N > 4 ? ' mid' : ''}">
       <header class="tx-top">
         <div class="tx-info">第 <b class="tx-hno">1</b> 手<span class="tx-blinds"> · 盲注 <b>${this.SB}/${this.BB}</b></span></div>
+        <button class="tx-ibtn tx-addai" aria-label="加入一位電腦玩家" hidden>＋🤖<span class="tx-lbl"> 電腦</span></button>
+        <button class="tx-ibtn tx-invite" aria-label="邀請朋友中途入座" hidden>🔗<span class="tx-lbl"> 邀請</span></button>
         <button class="tx-ibtn tx-snd" aria-label="音效開關"></button>
         <button class="tx-ibtn tx-style" aria-label="牌面風格">🎴<span class="tx-lbl"> 牌面</span></button>
         <button class="tx-ibtn tx-logbtn" aria-label="牌局紀錄">☰</button>
       </header>
       <main class="tx-wrap"><div class="tx-table">
-        ${seat(1)}${seat(2)}${seat(3)}
-        ${[0, 1, 2, 3].map(p => `<div class="tx-bet" data-p="${p}"><span class="tx-chip"></span><b></b></div>`).join('')}
+        ${ks.slice(1).map(seat).join('')}
+        ${ks.map(bet).join('')}
         <div class="tx-deck"></div>
         <div class="tx-center">
           <div class="tx-phase"></div>
@@ -576,8 +624,8 @@ if (typeof Platform !== 'undefined') {
     const U = this._ui = {
       app: q('.tx-app'), hno: q('.tx-hno'), phase: q('.tx-phase'), slots: [...root.querySelectorAll('.tx-slot')], board: q('.tx-board'),
       pot: q('.tx-pot'), potv: q('.tx-pot b'), deck: q('.tx-deck'), banner: q('.tx-banner'),
-      seat: [q('.tx-me'), ...[1, 2, 3].map(p => q(`.tx-seat[data-p="${p}"]`))],
-      bet: [0, 1, 2, 3].map(p => q(`.tx-bet[data-p="${p}"]`)),
+      seat: [q('.tx-me'), ...ks.slice(1).map(p => q(`.tx-seat[data-p="${p}"]`))],
+      bet: ks.map(p => q(`.tx-bet[data-p="${p}"]`)), addai: q('.tx-addai'), invite: q('.tx-invite'),
       held: q('.tx-held'), str: q('.tx-str'), wait: q('.tx-wait'),
       raise: q('.tx-raise'), presets: q('.tx-presets'), rng: q('.tx-rng'), rval: q('.tx-rval'), rlbl: q('.tx-rlbl'), rok: q('.tx-rok'),
       fold: q('.tx-fold'), call: q('.tx-call'), raiseBtn: q('.tx-raisebtn'), snd: q('.tx-snd'), log: q('.tx-log'), logList: q('.tx-log ul'),
@@ -589,6 +637,12 @@ if (typeof Platform !== 'undefined') {
     sndIcon();
     U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); };
     q('.tx-logbtn').onclick = () => U.log.classList.add('open');
+    U.addai.onclick = () => { if (this._addSeat('', true) >= 0) this.render(); };
+    U.invite.onclick = () => {
+      const m = Platform.ui.modal({ title: '邀請朋友入座', html: `<p>連結傳給朋友，打開即可中途入座（接手電腦座位，或下一手加入新座位）。</p>
+        <div class="net-url"><input readonly value="${Platform.net.inviteUrl()}"></div>`,
+        buttons: [{ label: '複製連結', primary: true, onClick: c => { const i = m.el.querySelector('input'); i.select(); try { document.execCommand('copy'); Platform.toast('已複製連結'); } catch {} c(); } }, { label: '關閉' }] });
+    };
     q('.tx-logx').onclick = () => U.log.classList.remove('open');
     q('.tx-style').onclick = () => Platform.ui.modal({
       title: '選擇牌面風格', html: '即時切換（會記住）',
@@ -632,7 +686,11 @@ if (typeof Platform !== 'undefined') {
     const O = this.O;
     if (O && !O.started) { this._renderRoom(); return; }
     const s = this.st; if (!s) return;
-    if (!root.querySelector('.tx-app')) this._build();
+    if (!root.querySelector('.tx-app') || this._ui.seat.length !== s.players.length) {
+      const old = this._prev; this._build(s.players.length);
+      // 牌局中途加座位而重建骨架：沿用上一個快照（不重播發牌），公共牌/輪到誰/操作鈕強制重畫
+      if (old && old.hand === s.handNo) this._prev = Object.assign({}, old, { boardLen: 0, toAct: -2, myTurn: false });
+    }
     const U = this._ui, me = O ? O.mySeat : 0, pl = s.players, N = pl.length, isHost = !O || O.isHost;
     const pos = i => (i - me + N) % N; // 0 = 自己（下方），1 右、2 上、3 左
     const P = this._prev, newHand = !P || P.hand !== s.handNo;
@@ -793,6 +851,8 @@ if (typeof Platform !== 'undefined') {
     }
     const myTurn = live && s.toAct === me && mine && !mine.folded && !mine.allin;
     U.app.classList.toggle('myturn', !!myTurn);
+    U.addai.hidden = !isHost || pl.length >= this.MAX_SEATS || s.street === 'over';
+    U.invite.hidden = !(O && O.isHost);
     U.wait.textContent = myTurn ? '輪到你' : live ? `輪到 ${pl[s.toAct].name}…` : '';
     if (myTurn && (!P || !P.myTurn || newHand)) {
       const L = this.legal(me);
@@ -825,8 +885,11 @@ if (typeof Platform !== 'undefined') {
 
   Platform.register({
     id: 'texas', name: '德州撲克', icon: '🃏',
-    desc: '德州撲克無限注，下注/加注/全下', players: { min: 2, max: 4 },
+    desc: '德州撲克無限注，下注/加注/全下', players: { min: 2, max: 8 },
     online: true,
+    target: Texas, settings: [
+      { k: 'SEATS', label: '人數', def: 4, min: 2, max: 8 }, { k: 'START', label: '起始籌碼', def: 1000, min: 100, max: 100000, step: 100 },
+      { k: 'BB', label: '大盲', def: 20, min: 2, max: 10000, step: 2 }],
     mount(stage, opts) {
       const root = document.createElement('div');
       root.id = 'tx-root'; root.className = 'tx-root';

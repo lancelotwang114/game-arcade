@@ -431,8 +431,8 @@ if (typeof Platform !== 'undefined') {
       iWin ? Platform.audio.win() : Platform.audio.lose(); if (iWin) sfx.play('toast', { gain: .6 });
       this._overModal = Platform.ui.modal({ title: iWin ? '🏆 你的籌碼最多！' : '遊戲結束',
         html: pl.slice().sort((a, b) => b.chips - a.chips).map(p => `${esc(p.name)}：$${p.chips}`).join('<br>'),
-        buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.exit(); } }]
-          : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.exit(); } }] });
+        buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.leave(); } }]
+          : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.leave(); } }] });
     }
     this._prev = { round: s.roundNo, phase: s.phase, turn: s.turn, hand: s.hand, hole: s.holeShown, bets: pl.map(p => p.hands.length ? p.hands.reduce((a, h) => a + h.bet, 0) : p.bet) };
     this._push();
@@ -480,6 +480,9 @@ if (typeof Platform !== 'undefined') {
     id: 'blackjack', name: '21 點', icon: '♠️',
     desc: '輪流當莊：要牌、加倍、分牌、保險，過五關賠 2 倍', players: { min: 2, max: 4 },
     online: true,
+    target: B, settings: [ // 最低注上限 100 ≤ 最高注下限 100，兩者不會交叉
+      { k: 'START', label: '起始籌碼', def: 1000, min: 100, max: 100000, step: 100 }, { k: 'ROUNDS', label: '局數', def: 8, min: 1, max: 40 },
+      { k: 'MIN_BET', label: '最低注', def: 10, min: 10, max: 100, step: 10 }, { k: 'MAX_BET', label: '最高注', def: 500, min: 100, max: 10000, step: 10 }],
     mount(stage, opts) {
       const root = document.createElement('div'); root.id = 'bj-root'; root.className = 'bj-root'; stage.appendChild(root);
       B._root = root; B._prev = null; B._overShown = false;

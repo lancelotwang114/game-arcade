@@ -374,8 +374,8 @@ if (typeof Platform !== 'undefined') {
       iWin ? Platform.audio.win() : Platform.audio.lose(); if (iWin) sfx.play('toast', { gain: .6 });
       this._overModal = Platform.ui.modal({ title: iWin ? '🏆 你活到最後！' : '遊戲結束',
         html: `最後存活：<b>${w.name.replace(/[<>&"']/g, '')}</b>`,
-        buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.exit(); } }]
-          : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.exit(); } }] });
+        buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.leave(); } }]
+          : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.leave(); } }] });
     }
     this._prev = { round: s.roundNo, bids: s.bids.length, reveal: !!s._reveal, shot: !!s._shot, turn: s.turn };
     this._push();
@@ -416,6 +416,7 @@ if (typeof Platform !== 'undefined') {
     id: 'liarsdice', name: '吹牛骰子', icon: '🎲',
     desc: '搖骰吹牛，1 點萬用；被抓包就玩俄羅斯輪盤', players: { min: 2, max: 4 },
     online: true,
+    target: L, settings: [{ k: 'DICE', label: '每人骰數', def: 5, min: 3, max: 5 }],
     mount(stage, opts) {
       const root = document.createElement('div'); root.id = 'ld-root'; root.className = 'ld-root'; stage.appendChild(root);
       L._root = root; L._prev = null; L._overShown = false; L._tl = Platform.fx.timeline(root);
