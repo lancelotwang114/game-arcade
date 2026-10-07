@@ -95,7 +95,7 @@
 .b2-chip:disabled { opacity: .3; cursor: default; }
 .b2-hand { display: flex; flex-direction: column; align-items: center; padding: 18px 0 16px; }
 .b2-row { display: flex; justify-content: center; align-items: flex-end; }
-.b2-hand .b2-card { --w: clamp(56px, 6vw, 88px); margin-left: calc(var(--w) * -.48); cursor: pointer; transform-origin: 50% 160%; }
+.b2-hand .b2-card { --w: clamp(56px, 6vw, 88px); margin-left: calc(var(--w) * -.48); cursor: pointer; transform-origin: 50% 400%; }
 .b2-hand .b2-card:first-child { margin-left: 0; }
 .b2-hand .b2-card.sel { transform: translateY(-22px); box-shadow: 0 0 0 3px var(--accent), 0 12px 22px rgba(0,0,0,.55); }
 .b2-acts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; min-width: 150px; }

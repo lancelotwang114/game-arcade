@@ -1,8 +1,9 @@
 /* 大老二 Big Two — 單機 + AI（4 人，每人 13 張）
    規則（台灣常見版 + 炸彈）：
    - 點數 3 < 4 < … < K < A < 2；花色 梅花 < 方塊 < 紅心 < 黑桃。
-   - 牌型：單張、對子、五張（順子 < 同花 < 葫蘆 < 鐵支 < 同花順）；不能單出三條。
-   - 炸彈：鐵支（四條帶一張）、同花順可以壓任何牌型（含單張、對子）；炸彈之間依五張牌型大小比較。
+   - 牌型：單張、對子、五張（順子、同花、葫蘆、鐵支、同花順）；不能單出三條。
+   - 只有相同牌型才能互壓（葫蘆不能壓順子、同花不能壓順子）。
+   - 炸彈：鐵支（四條帶一張）、同花順可以壓任何牌型（含單張、對子）；同花順 > 鐵支。
    - 順子：23456 最大、A2345 第二，其餘依最大一張；JQKA2、QKA23、KA234 不算順子。同順子比最大那張的花色。
    - 開局：持梅花 3 者先出，第一手必須包含梅花 3；之後每局由上局贏家先出（不限牌）。
    - 一輪中其他人都「過」，最後出牌者取得出牌權，可出任何牌型。
@@ -59,7 +60,7 @@ const BigTwo = {
     }
     if (!five(b)) return false;
     const ia = this.FIVE_ORDER.indexOf(a.type), ib = this.FIVE_ORDER.indexOf(b.type);
-    if (ib !== ia) return ib > ia;
+    if (ib !== ia) return this.isBomb(b) && ib > ia;      // 台灣規則：同牌型才能壓（葫蘆不能壓順子）；只有炸彈能跨牌型
     return this._cmpKey(b.key, a.key) > 0;
   },
 
@@ -211,8 +212,12 @@ if (typeof module !== 'undefined' && require.main === module) {
   assert.ok(beats('2c 3d 4h 5s 6c', 'Ac 2d 3h 4s 5c'), '23456 > A2345');
   assert.ok(beats('Ac 2d 3h 4s 5c', '10c Jd Qh Ks Ac'), 'A2345 > 10JQKA');
   assert.ok(beats('4c 5d 6h 7s 8c', '3c 4d 5h 6s 7s'), '45678 > 34567');
-  assert.ok(beats('3c 5c 7c 9c Jc', 'Ac 2d 3h 4s 5c'), '同花 > 任何順子');
+  assert.ok(!beats('3c 5c 7c 9c Jc', 'Ac 2d 3h 4s 5c'), '同花不能壓順子');
+  assert.ok(!beats('3c 3d 3h 9s 9c', '3c 4d 5h 6s 7c'), '葫蘆不能壓順子');
+  assert.ok(!beats('3c 3d 3h 9s 9c', '3c 5c 7c 9c Jc'), '葫蘆不能壓同花');
   assert.ok(beats('3c 3d 3h 3s 4c', 'Ac Ad Ah Ks Kc'), '鐵支 > 葫蘆');
+  assert.ok(beats('3c 4c 5c 6c 7c', '2c 2d 2h 2s 3d'), '同花順 > 鐵支');
+  assert.ok(!beats('2c 2d 2h 2s 3d', '3c 4c 5c 6c 7c'), '鐵支不能壓同花順');
   // 炸彈壓單張、對子
   assert.ok(beats('3c 3d 3h 3s 4c', '2s'), '鐵支壓單張 2'); assert.ok(beats('3c 4c 5c 6c 7c', '2s 2h'), '同花順壓對 2');
   assert.ok(!beats('3c 4d 5h 6s 7c', '3d'), '普通順子不能壓單張');
@@ -388,7 +393,7 @@ if (typeof Platform !== 'undefined') {
     let idx = 0;
     U.hand.innerHTML = rows.map(row => `<div class="b2-row">${row.map((c, k) => {
       const d = deal ? `--d:${dealDelay[idx] || 0}ms;` : ''; idx++;
-      return cardHTML(c, (this._sel.has(key(c)) ? 'sel ' : '') + (deal ? 'deal' : ''), d + (rows.length === 1 ? fan(k, row.length, 2.2, 1.1) : ''));
+      return cardHTML(c, (this._sel.has(key(c)) ? 'sel ' : '') + (deal ? 'deal' : ''), d + (rows.length === 1 ? fan(k, row.length, 4.5, 0) : ''));
     }).join('')}</div>`).join('');
     U.hand.querySelectorAll('.b2-card').forEach(el => {
       el.setAttribute('role', 'button'); el.tabIndex = 0;
