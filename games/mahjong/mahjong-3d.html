@@ -10749,12 +10749,20 @@ async function init() {
   const lobbyEl = document.getElementById('lobby');
   if (lobbyEl) lobbyEl.style.display = 'flex';
   // 房主誤關視窗：有連線房主存檔 → 顯示「繼續上局」以恢復房間（單機存檔維持原行為不顯示）
-  try { if (Game.loadSave()?.net) document.getElementById('resume-bar').style.display='block'; } catch(e) {}
+  // 走大廳共用房間時不提供：重開後大廳 peer id 會變，舊賓客連不回來
+  try { if (Game.loadSave()?.net && !new URLSearchParams(location.search).has('arcade')) document.getElementById('resume-bar').style.display='block'; } catch(e) {}
 
   // 平台大廳「連線」進場 ?online=1 → 直接開連線對戰畫面；嵌在大廳 iframe 內時加 in-arcade（避開平台「← 回大廳」鈕）
   try {
     if (window.self !== window.top) document.documentElement.classList.add('in-arcade');
     if (new URLSearchParams(location.search).get('online') === '1') Lobby.showOnline();
+    // 走大廳共用房間：暱稱用大廳的，房主直接建房、賓客直接加入（不用再按一次）
+    const _br = MahjongNetwork._br();
+    if (_br) {
+      const _pn = document.getElementById('pname'); if (_pn) _pn.value = _br.name;
+      const _jn = document.getElementById('ol-join-name'); if (_jn) _jn.value = _br.name;
+      if (new URLSearchParams(location.search).get('online') === '1') Online.showCreate();
+    }
   } catch (e) {}
   // 邀請連結 ?room&host → 自動切到「加入」畫面並帶入連結（模組為 deferred，DOM 已就緒）
   try {
@@ -10773,7 +10781,7 @@ async function init() {
       if(_rcFresh&&_rc.room===(_ip.get('room')||'').toUpperCase()&&_rc.host===_ip.get('host')){
         const _nm=document.getElementById('ol-join-name'); if(_nm) _nm.value=_rc.name;
         Online.doJoin();
-      }
+      } else if (MahjongNetwork._br()) Online.doJoin();
     } else if(_rcFresh){
       // 從首頁重開（當初是貼連結加入）→ 預填好，按一下加入即可重連
       const _ce = document.getElementById('ol-join-code');
@@ -10854,7 +10862,8 @@ window.Online = {
     MahjongNetwork.init(name).then(id=>{
       MahjongNetwork.createRoom();
       this.peers=[{id,name}];
-      this._inviteUrl=`${location.origin}${location.pathname}?room=${MahjongNetwork.roomId}&host=${id}`;
+      const _br=MahjongNetwork._br();
+      this._inviteUrl=_br?_br.inviteUrl():`${location.origin}${location.pathname}?room=${MahjongNetwork.roomId}&host=${id}`;
       document.getElementById('ol-room-code').textContent=this._inviteUrl;
       this._updatePlayerList();
       this._status('等待玩家加入…');
@@ -11739,9 +11748,31 @@ window.MahjongNetwork = {
   playerId:null, playerName:null,
   onMessage:null, onPlayerJoin:null, onPlayerLeave:null,
 
+  // 嵌在牌桌遊戲廳（?arcade=1）：改走大廳共用房間（父頁 MJBridge → Platform.net），換遊戲可帶著賓客。
+  // 只換傳輸：用假連線物件（peer/open/on/send/close）冒充 PeerJS DataConnection，上層邏輯不動
+  _br(){ try{ return new URLSearchParams(location.search).has('arcade')&&window.parent!==window&&window.parent.MJBridge||null; }catch(e){ return null; } },
+  _fake(peer,name){
+    const B=this._br();
+    return {peer,open:true,metadata:{name},_h:{},on(ev,fn){this._h[ev]=fn;},send(d){if(this.open)B.send(peer,d);},close(){this.open=false;}};
+  },
+  _attach(){
+    const B=this._br();
+    B.attach(e=>{
+      const c=this.connections.find(x=>x.peer===e.peer);
+      if(e.ev==='join'&&B.isHost()){
+        if(c){ c._dropped=true; c.open=false; this.connections=this.connections.filter(x=>x!==c); } // 同一人重新入座：換新連線，不當離線
+        const n=this._fake(e.peer,e.name); this._handleIncoming(n); n._h.open&&n._h.open();
+      }
+      else if(e.ev==='data'&&c) c._h.data&&c._h.data(JSON.parse(JSON.stringify(e.d))); // 父頁物件轉成本頁的（跨 realm）
+      else if(e.ev==='leave'&&c) c._h.close&&c._h.close();
+    });
+  },
   // fixedId：房主復原時沿用舊 peerId，讓客戶端能連回同一個位址
   init(playerName,fixedId){
     this.playerName=playerName;
+    const B=this._br();
+    // attach 延到下一輪：等呼叫端 .then 設好 onPlayerJoin/onMessage 再送出排隊事件，否則會被吃掉
+    if(B) return B.ready.then(id=>{ this.playerId=id; setTimeout(()=>this._attach(),0); return id; });
     this.playerId=fixedId||('mj_'+Math.random().toString(36).substr(2,9));
     if(this.peer&&!this.peer.destroyed){try{this.peer.destroy();}catch(e){}}
     // 只用 PeerJS 官方雲（預設設定已含 STUN + TURN）。
@@ -11772,11 +11803,17 @@ window.MahjongNetwork = {
   },
   createRoom(){
     this.isHost=true;
-    this.roomId=Math.random().toString(36).substr(2,6).toUpperCase();
+    const B=this._br();
+    this.roomId=B?B.roomId():Math.random().toString(36).substr(2,6).toUpperCase();
     return this.roomId;
   },
   joinRoom(roomId,hostId){
     this.roomId=roomId; this.isHost=false;
+    const B=this._br();
+    if(B){ // 先建假連線接住房主回訊；連上房主才 resolve（之後的 reconnect_request 才送得出去），失敗就撤掉
+      const c=this._fake(hostId,''); this._setupConn(c);
+      return B.join(hostId).then(()=>c,e=>{ c._dropped=true; c.open=false; this.connections=this.connections.filter(x=>x!==c); throw e; });
+    }
     return new Promise((resolve,reject)=>{
       const conn=this.peer.connect(hostId,{reliable:true,metadata:{name:this.playerName,roomId}});
       // 房主不在線時 PeerJS 把錯誤報在 peer 上而非 conn，需自設逾時

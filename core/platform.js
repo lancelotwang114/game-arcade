@@ -32,7 +32,6 @@ const Platform = {
     if (!g.online) { this.toast && this.toast('此遊戲暫不支援連線'); return; }
     const n = this.net;
     if (!join && n && n.peer && n.isHost) { // 房主帶著原房間的賓客換遊戲
-      if (g.ownNet) { this.toast('此遊戲使用獨立連線房間，請先關閉目前房間'); return; }
       this.launch(id, { online: true, keepNet: true });
       setTimeout(() => n.broadcast('switch', { game: id }), 300); // 等新遊戲掛好連線處理器，賓客的 rejoin 才接得住
       return;
