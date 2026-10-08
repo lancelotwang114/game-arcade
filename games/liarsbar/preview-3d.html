@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>騙子酒吧 3D 預覽</title>
+<!-- 預覽原型：角色、槍、桌子全用 three.js 幾何體程式建模，不載入任何模型/貼圖；音效沿用 audio/ 既有檔案 -->
+<style>
+:root { --bg: #0b0806; --panel: rgba(22,15,10,.84); --line: rgba(231,196,110,.35); --accent: #e7c46e; --txt: #f3e9d2; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--txt); font-family: 'Noto Sans TC', system-ui, sans-serif; overflow: hidden; }
+canvas { display: block; touch-action: none; position: fixed; inset: 0; width: 100%; height: 100%; }
+.top { position: fixed; top: 12px; left: 16px; right: 16px; pointer-events: none; text-shadow: 0 1px 4px #000; }
+.top h1 { margin: 0; font-size: 18px; color: var(--accent); }
+.top p { margin: 2px 0 0; font-size: 13px; opacity: .8; }
+.ui { position: fixed; left: 0; right: 0; bottom: 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; align-items: center; background: linear-gradient(transparent, rgba(0,0,0,.78) 40%); }
+.grp { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+button { min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--txt); font: 600 15px 'Noto Sans TC', system-ui, sans-serif; cursor: pointer; }
+button.on { border-color: var(--accent); background: rgba(231,196,110,.24); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .35s; }
+</style>
+</head>
+<body>
+<div class="top"><h1>騙子酒吧 · 3D 角色預覽</h1><p>移動滑鼠／手指環顧 · 下方選角色與動作</p></div>
+<div class="flash" id="flash"></div>
+<div class="ui">
+  <div class="grp" id="who" role="group" aria-label="選擇角色"></div>
+  <div class="grp" role="group" aria-label="動作">
+    <button data-a="play">出牌</button><button data-a="liar">喊騙子</button><button data-a="raise">舉槍</button>
+    <button data-a="click">扣扳機（空膛）</button><button data-a="bang">扣扳機（實彈）</button>
+  </div>
+  <div class="grp" role="group" aria-label="視線">
+    <button data-l="">自然</button><button data-l="me">看我</button><button data-l="mouse">跟游標</button><button data-l="pile">看牌堆</button><button data-l="prev">看上家</button><button data-l="next">看下家</button>
+  </div>
+  <div class="grp" role="group" aria-label="表情動作">
+    <button data-a="drink">喝酒</button><button data-a="laugh">大笑</button><button data-a="nervous">緊張</button><button data-a="cheer">歡呼</button><button data-a="peek">伸長偷看</button>
+  </div>
+  <div class="grp"><button id="auto" class="on">自動輪播</button><button id="cam">切換視角</button></div>
+</div>
+<script type="module">
+// 預覽頁：舞台、角色、動作都在 lb3d.js（與正式遊戲共用），這裡只有操作面板
+import { createStage } from './lb3d.js';
+const FILES = { cock: 'cock-1.mp3', click: 'click.mp3', shot: 'shot-1.wav', slam: 'slam-1.wav', glass: 'glass-1.wav', slide: 'card-slide-1.wav', place: 'card-place-1.wav', shove: 'card-shove-1.wav' };
+const sfx = k => { try { const a = new Audio('audio/' + FILES[k]); a.volume = .7; a.play().catch(() => {}); } catch {} };
+const flashEl = document.getElementById('flash');
+const onFlash = o => { flashEl.style.transition = 'none'; flashEl.style.opacity = o; requestAnimationFrame(() => { flashEl.style.transition = ''; flashEl.style.opacity = 0; }); };
+const S = createStage(document.body, { sfx, onFlash }), { THREE, actors, ACTIONS, KINDS, camera, center } = S;
+
+let sel = 1, auto = true, autoT = 1.5;
+const who = document.getElementById('who');
+actors.forEach((a, i) => { const b = document.createElement('button'); b.textContent = KINDS[a.kind].name; b.dataset.i = i; who.append(b); });
+const paint = () => {
+  who.querySelectorAll('button').forEach(b => { const i = +b.dataset.i; b.classList.toggle('on', i === sel); b.hidden = S.fp && i === 0; });
+  document.getElementById('auto').classList.toggle('on', auto);
+  document.querySelectorAll('[data-l]').forEach(b => b.classList.toggle('on', (actors[sel].lookMode || '') === b.dataset.l));
+};
+who.onclick = e => { const b = e.target.closest('button'); if (b) { sel = +b.dataset.i; paint(); } }; // 視線按鈕亮起的是目前選中角色的設定
+document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { auto = false; paint(); S.act(sel, b.dataset.a); });
+// 視線目標：看我 = 相機、跟游標 = 游標射線與「過桌心、面向相機」平面的交點、上家／下家 = 鄰座的頭
+const ray = new THREE.Raycaster(), plane = new THREE.Plane(), hit = new THREE.Vector3(), camDir = new THREE.Vector3();
+const LOOK = {
+  me: () => 'me', pile: () => 'pile', prev: i => (i + 3) % 4, next: i => (i + 1) % 4,
+  mouse: () => () => { const m = S.pointer(); camera.getWorldDirection(camDir); plane.setFromNormalAndCoplanarPoint(camDir, center); ray.setFromCamera({ x: m.x, y: -m.y }, camera); return ray.ray.intersectPlane(plane, hit) || center; },
+};
+document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => {
+  const m = b.dataset.l; actors[sel].lookMode = m; S.look(sel, m ? LOOK[m](sel) : null); paint();
+});
+document.getElementById('auto').onclick = () => { auto = !auto; paint(); };
+document.getElementById('cam').onclick = () => { S.setFP(!S.fp); if (S.fp && sel === 0) sel = 1; paint(); };
+paint();
+S.onTick = dt => {
+  if (!auto || (autoT -= dt) > 0) return;
+  const free = actors.filter((a, i) => !a.busy && !(S.fp && i === 0));
+  if (free.length) { const keys = ['play', 'play', 'liar', 'raise', 'click', 'click', 'bang', 'drink', 'laugh', 'nervous', 'cheer', 'peek'];
+    S.act(actors.indexOf(free[Math.random() * free.length | 0]), keys[Math.random() * keys.length | 0]); }
+  autoT = 2.2 + Math.random() * 1.8;
+};
+</script>
+</body>
+</html>

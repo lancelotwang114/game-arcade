@@ -183,6 +183,16 @@
 /* 桌機以外不顯示紀錄按鈕時，紀錄常駐 */
 @media (orientation: landscape) and (min-height: 521px) { .lb-logbtn { display: none; } }
 
+/* 3D 角色模式（lb3d.js 載入成功才加 .three）：畫布鋪滿舞台當背景，2D 桌面裝飾隱藏；
+   座位頭像改透明但保留位置（飛牌動畫的起點），輪到誰改亮名牌 */
+.lb-3d { position: absolute; inset: 0; z-index: 0; display: block; width: 100% !important; height: 100% !important; }
+.lb-app.three .lb-stage::before, .lb-app.three .lb-stage::after, .lb-app.three .lb-gunrest { display: none; }
+.lb-app.three .lb-stage .lb-ava { opacity: 0; }
+.lb-app.three .lb-center { top: 47%; }                                     /* 往下移到 3D 桌面上，不擋對面角色 */
+.lb-app.three .lb-seat .lb-nm { padding: 2px 10px; border-radius: 99px; background: rgba(0,0,0,.55); }
+.lb-app.three .lb-seat.turn .lb-nm { color: #1a1206; background: var(--accent); box-shadow: 0 0 16px var(--accent); }
+@media (orientation: portrait) { .lb-app.three .lb-seat[data-p="1"], .lb-app.three .lb-seat[data-p="3"] { top: 12%; } } /* 名牌移到頭頂上方，不蓋住左右兩家 */
+
 @media (prefers-reduced-motion: reduce) {
   .lb-root *, .lb-root *::before, .lb-root *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .lb-root .lb-stamp { display: none; } /* 不閃現大印章；「騙子！」氣泡已傳達 */

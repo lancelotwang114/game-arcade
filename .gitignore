@@ -1,7 +1,11 @@
-# 工具設定
+# 開發 harness / 工具：本機保留，不推上公開 repo（此 repo push main = GitHub Pages 公開）
+# 長存靠私有備份 D:\lab\GITHUB\claude-global-harness\，不靠此公開 repo 的版控
 .claude/
 agentic-sop-kit/
+tools/
+CLAUDE.md
 __pycache__/
+*.bak
 
 # 草稿/來源圖（執行時不需要）
 /291f615c-*.png
