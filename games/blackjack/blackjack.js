@@ -39,7 +39,7 @@ const Blackjack = {
   },
 
   // ---------- 對局狀態 ----------
-  st: null, _timers: [],
+  st: null, _timers: [], TURN_SEC: 30, AI_SPEED: 1,
   newMatch(human = '你', online = null) {
     const names = online ? online.map((n, i) => n ?? ['', '阿牛', '小美', '老張'][i]) : [human, '阿牛', '小美', '老張'];
     this.st = { players: names.map((nm, i) => ({ id: i, name: nm, isAI: online ? online[i] == null : i !== 0, chips: this.START, bet: 0, hands: [], insured: null, style: ['', 'attack', 'balanced', 'defense'][i] })),
@@ -60,7 +60,12 @@ const Blackjack = {
     this.log(`🃏 第 ${s.roundNo} 局：${s.players[d].name} 當莊，請下注`);
     this._betAt = Date.now();
     if (this.render) this.render();
-    s.players.forEach((p, i) => { if (p.isAI && this.bettors().includes(i)) this._after(900 + Math.random() * 1400, () => this.setBet(i, this.aiBet(i))); });
+    const rn = s.roundNo;
+    s.players.forEach((p, i) => {
+      if (!this.bettors().includes(i)) return;
+      if (p.isAI) this._after((900 + Math.random() * 1400) * this.AI_SPEED, () => this.setBet(i, this.aiBet(i)));
+      else if (this.TURN_SEC) this._after(this.TURN_SEC * 1000, () => { if (s.roundNo === rn && s.phase === 'bet' && !p.bet) this.setBet(i, this.MIN_BET); }); // 逾時：下最低注
+    });
   },
   setBet(i, amt) {
     const s = this.st, p = s.players[i];
@@ -82,7 +87,8 @@ const Blackjack = {
     this._after(wait, () => {
       if (s.dealerCards[0].r === 'A' && order.some(i => this.canInsure(s.players[i]))) {
         s.phase = 'insure'; this.log('莊家明牌是 A：要買保險嗎？'); if (this.render) this.render();
-        order.forEach(i => { const p = s.players[i]; if (!this.canInsure(p)) p.insured = false; else if (p.isAI) this._after(800 + Math.random() * 900, () => this.insure(i, false)); });
+        order.forEach(i => { const p = s.players[i]; if (!this.canInsure(p)) p.insured = false; else if (p.isAI) this._after((800 + Math.random() * 900) * this.AI_SPEED, () => this.insure(i, false));
+          else if (this.TURN_SEC) { const rn = s.roundNo; this._after(this.TURN_SEC * 1000, () => { if (s.roundNo === rn && s.phase === 'insure' && p.insured === null) this.insure(i, false); }); } }); // 逾時：不買
         this._insureCheck();
       } else this._peek();
     });
@@ -169,7 +175,9 @@ const Blackjack = {
   },
   tick() {
     const s = this.st; if (!s || s.phase !== 'play' || s.turn < 0) return;
-    const i = s.turn; if (s.players[i].isAI) this._after(Math.max(1200 + Math.random() * 600, (this._dealtAt || 0) + 2500 - Date.now()), () => this.aiAct(i));
+    const i = s.turn, tok = this._tickNo = (this._tickNo || 0) + 1, wait = (this._dealtAt || 0) + 2500 - Date.now();
+    if (s.players[i].isAI) this._after(Math.max((1200 + Math.random() * 600) * this.AI_SPEED, wait), () => this.aiAct(i));
+    else if (this.TURN_SEC) this._after(Math.max(0, wait) + this.TURN_SEC * 1000, () => { if (this._tickNo === tok && s.turn === i && s.phase === 'play') this.aiAct(i); }); // 逾時：電腦代打一步
   },
 
   // ---------- 電腦：簡化基本策略 ----------
@@ -443,6 +451,9 @@ if (typeof Platform !== 'undefined') {
   B._paintDock = function () {
     const U = this._ui, s = this.st, me = this._me, p = s.players[me], D = s.dealer;
     let key, html;
+    const ck = s.phase === 'bet' && this.bettors().includes(me) && !p.bet ? 'bet' : s.phase === 'insure' && p.bet && p.insured === null ? 'ins'
+      : s.phase === 'play' && s.turn === me ? `play${s.hand}/${p.hands[s.hand].cards.length}` : '';
+    Platform.ui.turnClock(ck && `bj:${s.roundNo}:${ck}`, this.TURN_SEC);
     if (s.phase === 'bet' && this.bettors().includes(me) && !p.bet) {
       const max = Math.min(this.MAX_BET, p.chips), a = this._amt;
       key = `bet${a}${max}`;
@@ -480,9 +491,10 @@ if (typeof Platform !== 'undefined') {
     id: 'blackjack', name: '21 點', icon: '♠️',
     desc: '輪流當莊：要牌、加倍、分牌、保險，過五關賠 2 倍', players: { min: 2, max: 4 },
     online: true,
-    target: B, settings: [ // 最低注上限 100 ≤ 最高注下限 100，兩者不會交叉
-      { k: 'START', label: '起始籌碼', def: 1000, min: 100, max: 100000, step: 100 }, { k: 'ROUNDS', label: '局數', def: 8, min: 1, max: 40 },
-      { k: 'MIN_BET', label: '最低注', def: 10, min: 10, max: 100, step: 10 }, { k: 'MAX_BET', label: '最高注', def: 500, min: 100, max: 10000, step: 10 }],
+    target: B, settings: [ // 最低注選項都 ≤ 100 ≤ 最高注選項，兩者不會交叉
+      { k: 'START', label: '起始籌碼', def: 1000, options: [500, 1000, 5000, 10000], fmt: Platform.money }, { k: 'ROUNDS', label: '局數', def: 8, options: [4, 8, 12, 20], fmt: v => `${v} 局` },
+      { k: 'MIN_BET', label: '最低注', def: 10, options: [10, 50, 100], fmt: Platform.money }, { k: 'MAX_BET', label: '最高注', def: 500, options: [100, 500, 1000, 5000], fmt: Platform.money },
+      Platform.COMMON_CFG.turn, Platform.COMMON_CFG.ai],
     mount(stage, opts) {
       const root = document.createElement('div'); root.id = 'bj-root'; root.className = 'bj-root'; stage.appendChild(root);
       B._root = root; B._prev = null; B._overShown = false;

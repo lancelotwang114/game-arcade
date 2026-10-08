@@ -89,7 +89,7 @@ Platform.net = {
     const names = O.names || [];
     const esc = t => String(t).replace(/[<>&"'`]/g, c => `&#${c.charCodeAt(0)};`); // 名稱可能來自對方，進 innerHTML 前跳脫
     const list = names.map((n, i) => `<li>${i === O.mySeat ? '👉 ' : ''}座位 ${i + 1}：${n ? esc(n) : '（空）'}${i === 0 ? '（房主）' : ''}</li>`).join('');
-    const g = Platform._active, sum = g && g.settings && g.target ? g.settings.map(f => `${f.label} <b>${g.target[f.k]}</b>`).join(' · ') : '';
+    const g = Platform._active, sum = g && g.settings && g.target ? g.settings.map(f => `${f.label} <b>${esc(Platform.fmtCfg(f, g.target[f.k]))}</b>`).join(' · ') : '';
     const cfgRow = sum ? `<p class="net-cfg">${sum}</p>` : '';
     if (O.isHost) {
       const url = this.roomId ? this.inviteUrl() : '';

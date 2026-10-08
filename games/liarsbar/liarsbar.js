@@ -27,6 +27,7 @@ const LiarsBar = {
   st: null,
   _timers: [],
   _stage: null,
+  TURN_SEC: 30, AI_SPEED: 1, // 房間設定
 
   _aliveIdx(from, includeSelf) {
     const p = this.st.players, n = p.length;
@@ -132,7 +133,9 @@ const LiarsBar = {
     if (!s || s.phase === 'over') return;
     const p = s.players[s.turn];
     if (!p.alive) { this.nextTurn(); return; }
-    if (p.isAI) this._after(Math.max(1200 + Math.random() * 600, (this._dealtAt || 0) + 4300 - Date.now()), () => this.aiAct(s.turn));
+    const i = s.turn, tok = this._tickNo = (this._tickNo || 0) + 1, wait = (this._dealtAt || 0) + 4300 - Date.now();
+    if (p.isAI) this._after(Math.max((1200 + Math.random() * 600) * this.AI_SPEED, wait), () => this.aiAct(i));
+    else if (this.TURN_SEC) this._after(Math.max(0, wait) + this.TURN_SEC * 1000, () => { if (this._tickNo === tok && s.turn === i) this.aiAct(i); }); // 逾時：電腦代打一步
   },
 
   // ---------- AI ----------
@@ -641,6 +644,7 @@ if (typeof Platform !== 'undefined') {
       if (turnTo >= 0 && pl[turnTo]) U.seat[pos(turnTo)].classList.add('turn');
       if (this._3d && turnTo >= 0 && !this._pend) { const tk = pos(turnTo); [1, 2, 3].forEach(j => this._3d.look(j, j === tk ? null : tk || 'me')); }
       U.app.classList.toggle('myturn', myTurn);
+      Platform.ui.turnClock(myTurn ? `lb:${s.roundNo}:${total}:${s.lastPlay ? s.lastPlay.by : -1}` : null, LiarsBar.TURN_SEC);
       U.tip.textContent = tip;
       U.liar.disabled = !canLiar; U.liar.classList.toggle('hint', !!canLiar);
       this._paintPlay();
@@ -689,7 +693,7 @@ if (typeof Platform !== 'undefined') {
     id: 'liarsbar', name: '騙子酒吧', icon: '🍺',
     desc: '吹牛、抓謊、左輪淘汰', players: { min: 2, max: 4 },
     online: true,
-    settings: [], // 只有暱稱
+    target: LiarsBar, settings: [Platform.COMMON_CFG.turn, Platform.COMMON_CFG.ai],
     mount(stage, opts) {
       LiarsBar._stage = stage;
       const root = document.createElement('div');

@@ -15,7 +15,7 @@ const BigTwo = {
   cv(c) { return this.rv(c.r) * 4 + this.SUITS.indexOf(c.s); }, // 單張比較值
   TYPE_NAME: { single: '單張', pair: '對子', straight: '順子', fullhouse: '葫蘆', four: '鐵支', sflush: '同花順' },
   FIVE_ORDER: ['straight', 'fullhouse', 'four', 'sflush'],
-  START: 1000, UNIT: 10, // 起始籌碼、每點金額（房間設定）
+  START: 1000, UNIT: 10, TURN_SEC: 30, AI_SPEED: 1, // 起始籌碼、每點金額、行動限時、電腦速度（房間設定）
 
   // ---------- 牌型判定（純函式）----------
   // 順子：回傳比較鍵（越大越強），不是順子回傳 0。23456 = 17、A2345 = 16、其餘 = 最大點數（7..14）
@@ -167,7 +167,9 @@ const BigTwo = {
   tick() {
     const s = this.st; if (!s || s.phase !== 'play') return;
     // 發牌動畫期間電腦不出手
-    if (s.players[s.turn].isAI) this._after(Math.max(1100 + Math.random() * 700, (this._dealtAt || 0) + 3000 - Date.now()), () => this.aiAct(s.turn));
+    const i = s.turn, tok = this._tickNo = (this._tickNo || 0) + 1, wait = (this._dealtAt || 0) + 3000 - Date.now();
+    if (s.players[i].isAI) this._after(Math.max((1100 + Math.random() * 700) * this.AI_SPEED, wait), () => this.aiAct(i));
+    else if (this.TURN_SEC) this._after(Math.max(0, wait) + this.TURN_SEC * 1000, () => { if (this._tickNo === tok && s.turn === i) this.aiAct(i); }); // 逾時：電腦代打一步
   },
 
   // ---------- AI ----------
@@ -564,6 +566,7 @@ if (typeof Platform !== 'undefined') {
     U.status.textContent = s.phase !== 'play' ? '' : !s.table ? `${pl[s.turn].name} 有出牌權${s.first ? '（第一手須含梅花 3）' : ''}`
       : `${pl[s.table.by].name} 的${B.TYPE_NAME[s.table.t.type]} · 輪到 ${pl[s.turn].name}`;
     U.app.classList.toggle('myturn', s.phase === 'play' && s.turn === me);
+    Platform.ui.turnClock(s.phase === 'play' && s.turn === me ? `b2:${s.handNo}:${trick.length}:${s.passSeq || 0}` : null, B.TURN_SEC);
     if (s.phase === 'play' && s.turn === me && (!P || P.turn !== s.turn || newHand)) Platform.audio._tone(880, .25, 'sine', .1, newHand ? 3 : 0);
     // 紀錄（純文字）
     U.logList.replaceChildren(...s.log.map(l => { const li = document.createElement('li'); li.textContent = l; return li; }));
@@ -596,7 +599,8 @@ if (typeof Platform !== 'undefined') {
     id: 'bigtwo', name: '大老二', icon: '🂡',
     desc: '台灣大老二：對子、順子、葫蘆、鐵支炸彈', players: { min: 2, max: 4 },
     online: true,
-    target: B, settings: [{ k: 'START', label: '起始籌碼', def: 1000, min: 100, max: 100000, step: 100 }, { k: 'UNIT', label: '每點金額', def: 10, min: 1, max: 1000 }],
+    target: B, settings: [{ k: 'START', label: '起始籌碼', def: 1000, options: [500, 1000, 5000, 10000], fmt: Platform.money },
+      { k: 'UNIT', label: '每點金額', def: 10, options: [1, 5, 10, 50, 100], fmt: v => `${Platform.money(v)}/點` }, Platform.COMMON_CFG.turn, Platform.COMMON_CFG.ai],
     mount(stage, opts) {
       const root = document.createElement('div'); root.id = 'b2-root'; root.className = 'b2-root'; stage.appendChild(root);
       B._root = root; B._human = '你'; B._prev = null; B._overShown = false; B._tl = Platform.fx.timeline(root);

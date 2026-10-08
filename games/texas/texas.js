@@ -93,7 +93,7 @@ const Texas = {
   makeDeck() { const d = []; for (const s of ['s', 'h', 'd', 'c']) for (const r of this.RANKS) d.push({ r, s }); return d; },
 
   // ---------- 對局狀態 ----------
-  st: null, _timers: [], _root: null, BB: 20, START: 1000, SEATS: 4, MAX_SEATS: 8,
+  st: null, _timers: [], _root: null, BB: 20, START: 1000, SEATS: 4, MAX_SEATS: 8, TURN_SEC: 30, AI_SPEED: 1,
   get SB() { return Math.max(1, Math.floor(this.BB / 2)); },
   AI_NAMES: ['', '阿傑', '小琪', '老王', '美玲', '大雄', '阿凱', '小芳'],
   _mkPlayer(i, name, isAI) {
@@ -165,7 +165,11 @@ const Texas = {
     if (nxt === null) { this._nextStreet(); return; }
     s._seat = nxt; s.toAct = nxt;
     if (this.render) this.render();
-    if (s.players[nxt].isAI) this._after(1200 + Math.random() * 600, () => this.aiAct(nxt));
+    const tok = this._tickNo = (this._tickNo || 0) + 1;
+    if (s.players[nxt].isAI) this._after((1200 + Math.random() * 600) * this.AI_SPEED, () => this.aiAct(nxt));
+    else if (this.TURN_SEC) this._after(this.TURN_SEC * 1000, () => { // 逾時：能過牌就過，否則蓋牌
+      if (this._tickNo === tok && s.toAct === nxt) this.apply(nxt, this.legal(nxt).check ? 'check' : 'fold');
+    });
   },
 
   // 合法動作給人類 UI
@@ -840,6 +844,7 @@ if (typeof Platform !== 'undefined') {
     }
     const myTurn = live && s.toAct === me && mine && !mine.folded && !mine.allin;
     U.app.classList.toggle('myturn', !!myTurn);
+    Platform.ui.turnClock(myTurn ? `tx:${s.handNo}:${s.street}:${s.toAct}:${s.currentBet}:${(s.log || []).length}` : null, Texas.TURN_SEC);
     U.addai.hidden = !isHost || pl.length >= this.MAX_SEATS || s.street === 'over';
     U.invite.hidden = !(O && O.isHost);
     U.wait.textContent = myTurn ? '輪到你' : live ? `輪到 ${pl[s.toAct].name}…` : '';
@@ -877,8 +882,10 @@ if (typeof Platform !== 'undefined') {
     desc: '德州撲克無限注，下注/加注/全下', players: { min: 2, max: 8 },
     online: true,
     target: Texas, settings: [
-      { k: 'SEATS', label: '人數', def: 4, min: 2, max: 8 }, { k: 'START', label: '起始籌碼', def: 1000, min: 100, max: 100000, step: 100 },
-      { k: 'BB', label: '大盲', def: 20, min: 2, max: 10000, step: 2 }],
+      { k: 'SEATS', label: '人數', def: 4, options: [2, 3, 4, 5, 6, 7, 8], fmt: v => `${v} 人` },
+      { k: 'START', label: '起始籌碼', def: 1000, options: [500, 1000, 5000, 10000], fmt: Platform.money },
+      { k: 'BB', label: '大盲', def: 20, options: [10, 20, 50, 100, 200], fmt: v => `${Platform.money(v / 2)}/${Platform.money(v)}` },
+      Platform.COMMON_CFG.turn, Platform.COMMON_CFG.ai],
     mount(stage, opts) {
       const root = document.createElement('div');
       root.id = 'tx-root'; root.className = 'tx-root';

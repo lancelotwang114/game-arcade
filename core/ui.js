@@ -10,6 +10,17 @@ Platform.toast = function (msg, ms = 1800) {
 };
 
 Platform.ui = {
+  // 行動限時倒數（輪到自己時顯示）：key 換了就重新從 sec 倒數；key 為空或 sec=0 收起。實際逾時由房主判定
+  turnClock(key, sec) {
+    let el = document.getElementById('turn-clock');
+    if (!key || !sec) { clearInterval(this._tcT); this._tcKey = null; if (el) el.hidden = true; return; }
+    if (key === this._tcKey && el) return;
+    clearInterval(this._tcT); this._tcKey = key;
+    if (!el) { el = document.createElement('div'); el.id = 'turn-clock'; el.setAttribute('role', 'timer'); (document.getElementById('stage') || document.body).appendChild(el); }
+    const end = Date.now() + sec * 1000; el.hidden = false;
+    const tick = () => { const left = Math.max(0, Math.ceil((end - Date.now()) / 1000)); el.textContent = `⏱ ${left}`; el.classList.toggle('warn', left <= 5); if (!left) clearInterval(this._tcT); };
+    tick(); this._tcT = setInterval(tick, 250);
+  },
   // 全螢幕遮罩對話框。buttons: [{label, primary, onClick}]。回傳 {el, close}
   modal({ title = '', html = '', buttons = [] } = {}) {
     const ov = document.createElement('div');

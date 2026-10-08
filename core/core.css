@@ -122,12 +122,20 @@ body {
 .gc-btns .gc-cfg { flex: 0 0 44px; min-height: 44px; background: var(--bg2); color: var(--gold2); font-size: 18px; }
 .cfg-form { display: grid; gap: 10px; text-align: left; min-width: min(300px, 80vw); }
 .cfg-row { display: grid; grid-template-columns: 6em 1fr; align-items: center; gap: 10px; font-size: 15px; }
-.cfg-row input { min-width: 0; width: 100%; box-sizing: border-box; min-height: 44px; background: rgba(0,0,0,.4); border: 1px solid var(--line); color: var(--ink);
+.cfg-row select option { background: #1a1a1a; color: var(--ink); }
+.cfg-row input, .cfg-row select { min-width: 0; width: 100%; box-sizing: border-box; min-height: 44px; background: rgba(0,0,0,.4); border: 1px solid var(--line); color: var(--ink);
   border-radius: 8px; padding: 6px 10px; font-size: 16px; font-family: inherit; }
-.cfg-row input:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.cfg-row input:focus-visible, .cfg-row select:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 .net-cfg { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
 .net-cfg b { color: var(--gold2); }
 #room-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin: 0 0 3vh; padding: 10px 16px;
   border: 1px solid var(--gold); border-radius: 12px; background: rgba(0,0,0,.35); color: var(--ink); font-size: 14px; max-width: 760px; }
 #room-bar b { color: var(--gold2); letter-spacing: .1em; }
 #room-bar .btn { min-height: 44px; }
+/* 行動限時倒數（Platform.ui.turnClock） */
+#turn-clock { position: fixed; z-index: 60; top: calc(72px + env(safe-area-inset-top)); right: 12px; min-width: 64px; min-height: 36px; padding: 0 12px; display: flex; align-items: center; justify-content: center;
+  border-radius: 99px; border: 1px solid var(--gold); background: rgba(0,0,0,.6); color: var(--gold2); font: 700 16px 'Oswald', 'Noto Sans TC', sans-serif; pointer-events: none; }
+#turn-clock[hidden] { display: none; }
+#turn-clock.warn { border-color: #e5534b; color: #ff8a80; animation: tcPulse .5s ease-in-out infinite alternate; }
+@keyframes tcPulse { to { box-shadow: 0 0 16px #e5534b; } }
+@media (prefers-reduced-motion: reduce) { #turn-clock.warn { animation: none; } }

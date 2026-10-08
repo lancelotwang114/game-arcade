@@ -72,6 +72,7 @@ const Platform = {
       catch (e) { console.error('unmount failed', e); }
       this._active = null;
     }
+    if (this.ui && this.ui.turnClock) this.ui.turnClock(null);
     if (this.net && this.net.peer) { if (keepNet) this.net.handlers = {}; else this.net.reset(); }
     const lobby = document.getElementById('lobby');
     const stage = document.getElementById('stage');
@@ -82,16 +83,26 @@ const Platform = {
     renderRoomBar();
   },
 
-  // ---- 房內設定：遊戲 register 時給 settings: [{k, label, def, min, max, step}] 與 target（套用到的遊戲物件） ----
+  // ---- 房內設定：遊戲 register 時給 settings 與 target（套用到的遊戲物件） ----
+  // 欄位 {k, label, def, options:[數值...], fmt?(v)} → 下拉選單（像麻將）；舊式 {min, max, step} → 數字輸入
   _clampCfg(g, src) {
     const o = {};
     (g.settings || []).forEach(f => {
-      let v = Math.round(+(src || {})[f.k] / (f.step || 1)) * (f.step || 1);
+      const raw = +(src || {})[f.k];
+      if (f.options) { o[f.k] = f.options.includes(raw) ? raw : f.def; return; }
+      let v = Math.round(raw / (f.step || 1)) * (f.step || 1);
       if (!Number.isFinite(v)) v = f.def;
       o[f.k] = Math.max(f.min, Math.min(f.max, v));
     });
     return o;
   },
+  fmtCfg(f, v) { return f.fmt ? f.fmt(v) : String(v); },
+  // 各遊戲共用的設定欄位：行動限時（逾時由電腦代打一步）、電腦速度（電腦出手延遲倍率）
+  COMMON_CFG: {
+    turn: { k: 'TURN_SEC', label: '行動限時', def: 30, options: [15, 30, 60, 0], fmt: v => v ? `${v} 秒` : '不限' },
+    ai: { k: 'AI_SPEED', label: '電腦速度', def: 1, options: [1.6, 1, 0.5], fmt: v => ({ 1.6: '慢', 1: '正常', 0.5: '快' })[v] || v },
+  },
+  money: v => '$' + v.toLocaleString('en-US'),
   cfg(id) { const g = this.games.find(x => x.id === id); return g ? this._clampCfg(g, this.store.get('arcade_cfg_' + id, {})) : {}; },
   applyCfg(id, cfg) { const g = this.games.find(x => x.id === id); if (g && g.target) Object.assign(g.target, this._clampCfg(g, cfg)); },
   // 設定對話框：暱稱 + 該遊戲設定；存檔後呼叫 after()
@@ -102,10 +113,12 @@ const Platform = {
     const m = this.ui.modal({
       title: `${g.name} — 設定`,
       html: `<div class="cfg-form">${row('_name', '暱稱', this.store.get('arcade_name', ''), 'type="text" maxlength="12" placeholder="玩家"')}`
-        + (g.settings || []).map(f => row(f.k, f.label, cur[f.k], `type="number" inputmode="numeric" min="${f.min}" max="${f.max}" step="${f.step || 1}"`)).join('') + '</div>',
+        + (g.settings || []).map(f => f.options
+          ? `<label class="cfg-row"><span>${f.label}</span><select data-k="${f.k}">${f.options.map(o => `<option value="${o}"${o === cur[f.k] ? ' selected' : ''}>${esc(this.fmtCfg(f, o))}</option>`).join('')}</select></label>`
+          : row(f.k, f.label, cur[f.k], `type="number" inputmode="numeric" min="${f.min}" max="${f.max}" step="${f.step || 1}"`)).join('') + '</div>',
       buttons: [
         { label: '儲存', primary: true, onClick: close => {
-          const v = {}; m.el.querySelectorAll('input[data-k]').forEach(i => { v[i.dataset.k] = i.value; });
+          const v = {}; m.el.querySelectorAll('[data-k]').forEach(i => { v[i.dataset.k] = i.value; });
           this.store.set('arcade_name', String(v._name || '').replace(/[<>&"'`]/g, '').trim().slice(0, 12));
           this.store.set('arcade_cfg_' + id, this._clampCfg(g, v));
           close(); after && after();

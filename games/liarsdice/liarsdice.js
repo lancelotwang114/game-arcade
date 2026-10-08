@@ -25,7 +25,7 @@ const LiarsDice = {
   },
 
   // ---------- 對局狀態 ----------
-  st: null, _timers: [],
+  st: null, _timers: [], TURN_SEC: 30, AI_SPEED: 1,
   // online：連線時各座位名字（null = 空位由電腦補）
   newMatch(human = '你', online = null) {
     const names = online ? online.map((n, i) => n ?? ['', '阿牛', '小美', '老張'][i]) : [human, '阿牛', '小美', '老張'];
@@ -82,7 +82,9 @@ const LiarsDice = {
   },
   tick() {
     const s = this.st; if (!s || s.phase !== 'bid') return;
-    if (s.players[s.turn].isAI) this._after(Math.max(1300 + Math.random() * 900, (this._rolledAt || 0) + 2600 - Date.now()), () => this.aiAct(s.turn));
+    const i = s.turn, tok = this._tickNo = (this._tickNo || 0) + 1, wait = (this._rolledAt || 0) + 2600 - Date.now();
+    if (s.players[i].isAI) this._after(Math.max((1300 + Math.random() * 900) * this.AI_SPEED, wait), () => this.aiAct(i));
+    else if (this.TURN_SEC) this._after(Math.max(0, wait) + this.TURN_SEC * 1000, () => { if (this._tickNo === tok && s.turn === i && s.phase === 'bid') this.aiAct(i); }); // 逾時：電腦代打一步
   },
 
   // ---------- AI：以機率估計 ----------
@@ -367,6 +369,7 @@ if (typeof Platform !== 'undefined') {
     if (s._shot && P && !P.shot) this._roulette(s._shot);
     this._paintMisc();
     U.app.classList.toggle('myturn', s.phase === 'bid' && s.turn === me);
+    Platform.ui.turnClock(s.phase === 'bid' && s.turn === me ? `ld:${s.roundNo}:${s.bids.length}` : null, L.TURN_SEC);
     if (s.phase === 'bid' && s.turn === me && pl[me].alive && (!P || P.turn !== s.turn || newRound)) Platform.audio._tone(880, .25, 'sine', .1, newRound ? 2.6 : 0);
     if (s.phase === 'over' && !this._overShown) {
       this._overShown = true;
@@ -416,7 +419,7 @@ if (typeof Platform !== 'undefined') {
     id: 'liarsdice', name: '吹牛骰子', icon: '🎲',
     desc: '搖骰吹牛，1 點萬用；被抓包就玩俄羅斯輪盤', players: { min: 2, max: 4 },
     online: true,
-    target: L, settings: [{ k: 'DICE', label: '每人骰數', def: 5, min: 3, max: 5 }],
+    target: L, settings: [{ k: 'DICE', label: '每人骰數', def: 5, options: [3, 4, 5], fmt: v => `${v} 顆` }, Platform.COMMON_CFG.turn, Platform.COMMON_CFG.ai],
     mount(stage, opts) {
       const root = document.createElement('div'); root.id = 'ld-root'; root.className = 'ld-root'; stage.appendChild(root);
       L._root = root; L._prev = null; L._overShown = false; L._tl = Platform.fx.timeline(root);
