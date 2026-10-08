@@ -141,7 +141,8 @@ const BigTwo = {
   pass(i) {
     const s = this.st;
     if (s.phase !== 'play' || s.turn !== i || !this.canPass()) return false;
-    s.players[i].last = '過'; s.passes++; s.passed[i] = true; // 過了這輪就不能再出，直到有人取得出牌權 s.passSeq = (s.passSeq || 0) + 1; s.lastPassBy = i; // UI 依序號顯示「過」
+    s.players[i].last = '過'; s.passes++; s.passSeq = (s.passSeq || 0) + 1; s.lastPassBy = i; // UI 依序號顯示「過」
+    s.passed[i] = true; // 過了這輪就不能再出，直到有人取得出牌權
     this.log(`${s.players[i].name} 過`);
     if (s.passes >= 3) {                                          // 其他三家都過：最後出牌者取得出牌權
       s.table = null; s.trick = []; s.passes = 0; s.passed = [false, false, false, false]; s.turn = s.leader;
@@ -237,7 +238,7 @@ if (typeof module !== 'undefined' && require.main === module) {
     B.st.lastWinner = 2; B.newHand(); assert.ok(has3c() && B.st.first, '之後每局也由梅花 3 先出');
     const s = B.st, H = ['3c 2s Ac', '5d 6d', '7h 8h', '9s 10s'].map(C);
     s.players.forEach((p, i) => { p.hand = H[i]; }); Object.assign(s, { first: false, turn: 0, leader: 0, table: null, passes: 0, passed: [false, false, false, false] });
-    B.play(0, [H[0][0]]); B.pass(1); B.play(2, [H[2][0]]); B.play(3, [H[3][0]]); B.play(0, [H[0][1]]);
+    B.play(0, [H[0][0]]); const ps0 = s.passSeq || 0; B.pass(1); assert.ok(s.passSeq === ps0 + 1 && s.lastPassBy === 1, '過牌要更新 passSeq / lastPassBy（UI 靠它顯示「過」）'); B.play(2, [H[2][0]]); B.play(3, [H[3][0]]); B.play(0, [H[0][1]]);
     assert.strictEqual(s.turn, 2, '過過的人這輪被跳過');
     B.pass(2); B.pass(3); assert.ok(s.turn === 0 && !s.table, '其他人都過，最後出牌者取得出牌權');
     assert.ok(!s.passed.some(Boolean), '新一輪過牌狀態清空');
@@ -295,7 +296,7 @@ if (typeof Platform !== 'undefined') {
   B._redact = function (seat) {
     const s = this.st, open = s.phase === 'scored' || s.phase === 'over';
     return JSON.parse(JSON.stringify({
-      players: s.players.map((p, i) => ({ id: p.id, name: p.name, isAI: p.isAI, chips: p.chips, last: p.last,
+      players: s.players.map((p, i) => ({ id: p.id, name: p.name, isAI: p.isAI, auto: !!p.auto, chips: p.chips, last: p.last,
         hand: (i === seat || open) ? p.hand : p.hand.map(() => ({ hidden: true })) })),
       handNo: s.handNo, turn: s.turn, table: s.table, trick: s.trick || [], passes: s.passes, leader: s.leader, first: s.first,
       phase: s.phase, log: s.log, winner: s.winner, lastWinner: s.lastWinner, lastResult: s.lastResult || null, passSeq: s.passSeq || 0, lastPassBy: s.lastPassBy, passed: s.passed,
@@ -329,7 +330,7 @@ if (typeof Platform !== 'undefined') {
       const seat = this.O.seatOf[from]; if (seat == null) return;
       delete this.O.peerOf[seat]; delete this.O.seatOf[from]; this.O.names[seat] = null;
       if (this.O.started && this.st && this.st.players[seat]) {
-        const p = this.st.players[seat]; p.isAI = true; this.log(`${p.name} 離線，改由電腦接手`);
+        const p = this.st.players[seat]; p.isAI = true; p.auto = true; this.log(`${p.name} 離線，改由電腦接手`); // 離席：代打中
         if (this.st.turn === seat) this.tick(); this.render();
       } else this._renderRoom();
       Platform.net.broadcast('lobby', { names: this.O.names });
@@ -419,6 +420,7 @@ if (typeof Platform !== 'undefined') {
       buttons: Object.keys(Platform.cards.STYLE_NAMES).map(k => ({ label: Platform.cards.STYLE_NAMES[k] + (Platform.cards.style === k ? ' ✓' : ''), primary: Platform.cards.style === k,
         onClick: c => { c(); Platform.cards.setStyle(k); this._skin(); } })) });
     this._skin();
+    Platform.hud.mount(this, { root, bar: q('.b2-top'), me: () => this._me, seatEl: i => this._ui && this._ui.seat[(i - this._me + 4) % 4] });
   };
 
   // ---------- 手牌（自己）----------
@@ -568,6 +570,8 @@ if (typeof Platform !== 'undefined') {
         else this.sfx.play('place', { gain: .8, when: .22 });
         U.type.textContent = B.TYPE_NAME[e.type] + (bomb ? '！' : ''); U.type.classList.toggle('bomb', bomb); Platform.fx.restart(U.type, 'pop');
         if (k) this._say(k, B.TYPE_NAME[e.type], 'type');
+        Platform.voice.say(B._voiceOf(e));
+        if (pl[e.by].hand.length === 1) tl.after(() => { Platform.voice.say(`${pl[e.by].name} 報牌`); if (k) this._say(k, '報牌！', 'type'); }, 1100);
         if (!k || e.by === me) this._sel = new Set();
       }
       // 一輪結束：桌上牌收走
@@ -580,14 +584,14 @@ if (typeof Platform !== 'undefined') {
         if (s.phase === 'play' && s.turn === me) tl.after(() => { this._say(0, '你有出牌權', 'type'); Platform.fx.restart(U.hand, 'hop'); Platform.audio.ding(); }, 400); // 取得出牌權
       }
       // 過
-      if ((s.passSeq || 0) > (P.passSeq || 0) && s.lastPassBy != null) { const k = pos(s.lastPassBy); if (k) this._say(k, '過'); Platform.audio.knock(); } // 過牌敲桌，同德州
+      if ((s.passSeq || 0) > (P.passSeq || 0) && s.lastPassBy != null) { const k = pos(s.lastPassBy); if (k) this._say(k, '過'); Platform.audio.knock(); Platform.voice.say('過'); } // 過牌敲桌，同德州
       // 結算
       if (s.phase === 'scored' && P.phase !== 'scored') {
         U.spot.forEach(o => o.classList.add('old'));
         // 贏牌特效：閃電劈向贏家、金色光環、「出完！」印章、彩帶，之後才出結算面板
         const kw = pos(s.winner), wEl = kw ? U.seat[kw].querySelector('.b2-pod') : U.seat[0];
         tl.after(() => {
-          this._bolt(wEl, 3, `${pl[s.winner].name} 出完！`); U.seat[kw].classList.add('win');
+          this._bolt(wEl, 3, `${pl[s.winner].name} 出完！`); U.seat[kw].classList.add('win'); Platform.voice.say(`${pl[s.winner].name} 出完了`);
           Platform.audio._noise(1.4, .9, 30); Platform.audio._tone(55, .9, 'sawtooth', .35); this.sfx.play('slam', { gain: 1 });
           const r = wEl.getBoundingClientRect(); if (!Platform.fx.reduced()) Platform.fx.confetti(r.left + r.width / 2, r.top + r.height / 2, 40);
         }, 350);
@@ -618,8 +622,12 @@ if (typeof Platform !== 'undefined') {
           : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.leave(); } }] });
     }
     this._prev = { hand: s.handNo, trickLen: trick.length, passSeq: s.passSeq || 0, myN, phase: s.phase, turn: s.turn };
+    Platform.hud.sync();
     this._push();
   };
+  // 語音報牌：單張報花色點數、對子報「一對 X」、五張報牌型
+  const SUIT_VOICE = { s: '黑桃', h: '紅心', d: '方塊', c: '梅花' };
+  B._voiceOf = e => e.type === 'single' ? SUIT_VOICE[e.cards[0].s] + e.cards[0].r : e.type === 'pair' ? '一對' + e.cards[0].r : B.TYPE_NAME[e.type] + (B.isBomb({ type: e.type }) ? '！' : '');
   B._say = function (k, t, cls = '') { const b = this._ui.bub[k]; b.textContent = t; b.className = 'b2-bub ' + cls; Platform.fx.restart(b, 'pop'); };
 
   // 送出動作：房主直接套用；賓客送給房主驗證
@@ -652,7 +660,7 @@ if (typeof Platform !== 'undefined') {
       if (opts && opts.online) B._startOnline(opts); else { B.O = null; B.newMatch('你'); }
     },
     unmount() {
-      B._clearTimers(); if (B._tl) B._tl.clear(); if (B._mq) B._mq.removeEventListener('change', B._onMq);
+      Platform.hud.unmount(); B._clearTimers(); if (B._tl) B._tl.clear(); if (B._mq) B._mq.removeEventListener('change', B._onMq);
       if (B._overModal) { B._overModal.close(); B._overModal = null; }
       B._root = null; B._ui = null; B.st = null; B.O = null; B._overShown = false;
     },
