@@ -303,8 +303,9 @@ if (typeof Platform !== 'undefined') {
       Platform.net.broadcast('lobby', { names: this.O.names });
     });
     Platform.net.on('egg', (d, from) => { // 彩蛋：賓客觸發的偷看，轉給所有人
-      const s = +d.seat; if (this.O.seatOf[from] == null || !this.st || !(s >= 0 && s < this.st.players.length)) return;
-      this._peekPlay(s); Platform.net.broadcast('egg', { seat: s });
+      const s = +d.seat, t = +d.target, N = this.st ? this.st.players.length : 0;
+      if (this.O.seatOf[from] == null || !(s >= 0 && s < N && t >= 0 && t < N && s !== t)) return;
+      this._peekPlay({ seat: s, target: t }); Platform.net.broadcast('egg', { seat: s, target: t });
     });
     Platform.net.on('act', (d, from) => {
       const seat = this.O.seatOf[from];
@@ -320,7 +321,7 @@ if (typeof Platform !== 'undefined') {
   LiarsBar._setupGuestNet = function () {
     Platform.net.on('welcome', d => { this.O.mySeat = d.seat; this._renderRoom(); });
     Platform.net.on('lobby', d => { this.O.names = d.names; this._renderRoom(); });
-    Platform.net.on('egg', (d, from) => { if (from === Platform.net.hostId && this.st) this._peekPlay(+d.seat); }); // 彩蛋：別人觸發的偷看
+    Platform.net.on('egg', (d, from) => { if (from === Platform.net.hostId && this.st) this._peekPlay({ seat: +d.seat, target: +d.target }); }); // 彩蛋：別人觸發的偷看
     Platform.net.on('start', d => { if (d && d.seat != null) this.O.mySeat = d.seat; this.O.started = true; if (this._overModal) { this._overModal.close(); this._overModal = null; } });
     Platform.net.on('state', d => {
       this.st = d.st; this.O.mySeat = d.seat; this.O.started = true;
@@ -487,23 +488,31 @@ if (typeof Platform !== 'undefined') {
       this._peekEgg(U);
     }).catch(e => console.warn('3D 載入失敗，維持 2D', e));
   };
-  // 彩蛋：快速連點同一個對手角色 7 下 → 他伸長脖子偷看下家的牌（純搞笑；連線時大家都看得到）
+  // 彩蛋：快速連點同一個人 7 下（對手角色，或自己的頭像）→ 另一位對手伸長脖子到他面前偷看牌（純搞笑；連線時大家都看得到）
   LiarsBar._peekEgg = function (U) {
     const T = this._3d, THREE = T.THREE, ray = new THREE.Raycaster(); let hit = -1, n = 0, last = 0;
-    U.stage.addEventListener('pointerdown', e => {
-      const cv = U.stage.querySelector('canvas.lb-3d'); if (!cv || this._3d !== T) return;
-      const r = cv.getBoundingClientRect(); ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -((e.clientY - r.top) / r.height * 2 - 1) }, T.camera);
-      const k = [1, 2, 3].find(j => T.actors[j] && T.actors[j].c.g.visible && ray.intersectObject(T.actors[j].c.g, true).length);
+    U.app.addEventListener('pointerdown', e => {
+      const cv = U.stage.querySelector('canvas.lb-3d'); if (!cv || this._3d !== T || !this.st) return;
+      let k = e.target.closest('.lb-me') ? 0 : null;                               // 自己：第一人稱沒有身體，點左下頭像（不含手牌，避免選牌誤觸）
+      if (k == null) {
+        const r = cv.getBoundingClientRect(); ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -((e.clientY - r.top) / r.height * 2 - 1) }, T.camera);
+        k = [1, 2, 3].find(j => T.actors[j] && T.actors[j].c.g.visible && ray.intersectObject(T.actors[j].c.g, true).length);
+      }
       if (k == null) { n = 0; return; }
       const now = Date.now(); n = k === hit && now - last < 600 ? n + 1 : 1; hit = k; last = now;
       if (n < 7) return; n = 0;
-      const me = this.O ? this.O.mySeat : 0, seat = (k + me) % this.st.players.length; // 相對位置 → 絕對座位（連線同步用）
-      if (!this.O) this._peekPlay(seat); else if (this.O.isHost) { this._peekPlay(seat); Platform.net.broadcast('egg', { seat }); } else Platform.net.sendHost('egg', { seat });
+      // 偷看的人：除了被點的人以外，隨機一位還活著、沒在做動作的對手
+      const who = [1, 2, 3].filter(j => j !== k && T.actors[j] && T.actors[j].c.g.visible && T.actors[j].alive && !T.actors[j].busy);
+      if (!who.length) return;
+      const me = this.O ? this.O.mySeat : 0, N = this.st.players.length, abs = j => (j + me) % N; // 相對位置 → 絕對座位（連線同步用）
+      const d = { seat: abs(who[Math.random() * who.length | 0]), target: abs(k) };
+      if (!this.O) this._peekPlay(d); else if (this.O.isHost) { this._peekPlay(d); Platform.net.broadcast('egg', d); } else Platform.net.sendHost('egg', d);
     });
   };
-  LiarsBar._peekPlay = function (seat) {
-    const T = this._3d, me = this.O ? this.O.mySeat : 0, k = (seat - me + this.st.players.length) % this.st.players.length, a = T && T.actors[k];
-    if (k && a && a.alive && !a.busy) T.act(k, 'peek');
+  LiarsBar._peekPlay = function (d) {
+    const T = this._3d; if (!T || !this.st) return;
+    const me = this.O ? this.O.mySeat : 0, N = this.st.players.length, rel = s => (s - me + N) % N, k = rel(d.seat), a = T.actors[k];
+    if (k && a && a.alive && !a.busy) T.peek(k, rel(d.target));
   };
   // 角色生死與狀態對齊遊戲（動畫中不打斷；開槍結果揭曉前不提早倒下）
   LiarsBar._sync3d = function (force) {

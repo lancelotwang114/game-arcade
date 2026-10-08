@@ -313,7 +313,7 @@ export function createStage(host, opts = {}) {
     ],
     // 伸長偷看下家的牌（惡搞，看不到牌）：故障抖兩下 → 竄過去 → 賊笑盯牌 → 轉頭看鏡頭（被抓包）→ 啵一聲縮回
     peek: a => {
-      const ti = (a.seat + 1) % 4, ang = ti * Math.PI / 2, cards = new V3(Math.sin(ang) * 1.05, .86, Math.cos(ang) * 1.05);
+      const ti = a._peekTarget != null ? a._peekTarget : (a.seat + 1) % 4, ang = ti * Math.PI / 2, cards = new V3(Math.sin(ang) * 1.05, .86, Math.cos(ang) * 1.05); // 預設偷看下家；_peekTarget 指定對象
       return [
         { d: .01, ev: x => { x.peekAt = new V3(cards.x * .62, 1.3, cards.z * .62); x._look = x.look; sfx('slide'); } },
         { d: .07, p: { nk: .14 }, lin: true }, { d: .06, p: { nk: .02 }, lin: true }, { d: .07, p: { nk: .2 }, lin: true }, { d: .06, p: { nk: .05 }, lin: true },
@@ -396,6 +396,7 @@ export function createStage(host, opts = {}) {
   return {
     THREE, scene, camera, actors, ACTIONS, KINDS, center,
     act(seat, name) { const a = actors[seat]; if (a && ACTIONS[name]) a.play(ACTIONS[name](a)); },
+    peek(seat, target) { const a = actors[seat]; if (!a) return; a._peekTarget = target; a.play(ACTIONS.peek(a)); a._peekTarget = null; }, // 伸頭偷看指定座位的牌
     // target：'me' = 相機、數字 = 看某座位的頭、'pile' = 牌堆、Vector3／函式、null = 自然
     look(seat, target) { const a = actors[seat]; if (!a) return;
       a.lookAt(target === 'me' ? camPos : typeof target === 'number' ? headOf(target) : target === 'pile' ? new V3(0, .86, 0) : target || null); },
