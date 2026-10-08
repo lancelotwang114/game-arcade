@@ -271,6 +271,7 @@ if (typeof module !== 'undefined') module.exports = BigTwo;
 if (typeof Platform !== 'undefined') {
   const B = BigTwo;
   const SR_ = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], SS_ = ['s', 'h', 'd', 'c'];
+  const faceOrder = (a, b) => SR_.indexOf(a.r) - SR_.indexOf(b.r) || B.SUITS.indexOf(a.s) - B.SUITS.indexOf(b.s); // 顯示用：A 2 3 … K（1、2 在最左）
   const TYPES = ['single', 'pair', 'straight', 'fullhouse', 'four', 'sflush'];
   const key = c => c.r + c.s;
   const known = c => !!(c && c.r);
@@ -423,7 +424,7 @@ if (typeof Platform !== 'undefined') {
   // ---------- 手牌（自己）----------
   B._myHand = function () {
     const h = [...this.st.players[this._me].hand].filter(known);
-    return B.sortHand(h);
+    return h.sort(faceOrder);
   };
   B._paintHand = function (deal, dealDelay = []) {
     const U = this._ui, h = this._myHand(), rows = portrait() && h.length > 7 ? [h.slice(0, 7), h.slice(7)] : [h];
@@ -559,7 +560,8 @@ if (typeof Platform !== 'undefined') {
         const e = trick[trick.length - 1], k = pos(e.by), bomb = B.isBomb({ type: e.type });
         U.spot.forEach(sp => sp.classList.remove('lead'));
         const sp = U.spot[k]; sp.className = 'b2-spot lead';
-        sp.innerHTML = e.cards.map((c, j) => cardHTML(c, 'in', `--d:${240 + j * 50}ms;${fan(j, e.cards.length, 5, 1.2)}`)).join('');
+        const shown = /straight|sflush/.test(e.type) && e.cards.some(c => c.r === '2') ? [...e.cards].sort(faceOrder) : e.cards; // A2345、23456 照連續順序排
+        sp.innerHTML = shown.map((c, j) => cardHTML(c, 'in', `--d:${240 + j * 50}ms;${fan(j, e.cards.length, 5, 1.2)}`)).join('');
         U.spot.forEach((o, j) => { if (j !== k && o.childElementCount) o.classList.add('old'); });
         e.cards.forEach((c, j) => tl.fly(k ? U.ava[k] : U.hand, sp, cardHTML(c, '', '--w:46px'), 280, j * 50, [-12, 0]));
         if (bomb) { this.sfx.play('slam', { gain: 1, when: .2 }); tl.after(() => { Platform.fx.restart(U.app, 'shake'); this._bolt(sp, 1); }, 220); }
