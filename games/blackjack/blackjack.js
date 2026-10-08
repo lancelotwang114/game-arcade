@@ -197,7 +197,7 @@ const Blackjack = {
     const p = s.players[i]; this.act(i, this.aiDecide(p.hands[s.hand], s.dealerCards[0], p.chips - this._committed(p)));
   },
 
-  log(m) { this.st.log.unshift(m); if (this.st.log.length > 12) this.st.log.pop(); },
+  log(m) { this.st.log.unshift(m); this.st.logN = (this.st.logN || 0) + 1; if (this.st.log.length > 12) this.st.log.pop(); },
   _after(ms, fn) { const t = setTimeout(fn, ms); this._timers.push(t); return t; },
   _clearTimers() { this._timers.forEach(clearTimeout); this._timers = []; },
 };
@@ -276,9 +276,9 @@ if (typeof Platform !== 'undefined') {
   B._redact = function () {
     const s = this.st;
     return JSON.parse(JSON.stringify({
-      players: s.players.map(p => ({ id: p.id, name: p.name, isAI: p.isAI, chips: p.chips, bet: p.bet, hands: p.hands, insured: p.insured })),
+      players: s.players.map(p => ({ id: p.id, name: p.name, isAI: p.isAI, auto: !!p.auto, chips: p.chips, bet: p.bet, hands: p.hands, insured: p.insured })),
       roundNo: s.roundNo, dealer: s.dealer, dealerCards: s.holeShown ? s.dealerCards : s.dealerCards.map((c, j) => j === 1 ? null : c),
-      holeShown: s.holeShown, phase: s.phase, turn: s.turn, hand: s.hand, log: s.log, lastNet: s.lastNet,
+      holeShown: s.holeShown, phase: s.phase, turn: s.turn, hand: s.hand, log: s.log, logN: s.logN, lastNet: s.lastNet,
     }));
   };
   B._push = function () {
@@ -292,8 +292,8 @@ if (typeof Platform !== 'undefined') {
     this._overShown = false; this.newMatch('你', this.O.names);
   };
   // 離線玩家改由電腦接手：補上他卡住的決定
-  B._aiTakeover = function (i) {
-    const s = this.st, p = s.players[i]; p.isAI = true; this.log(`${p.name} 離線，改由電腦接手`);
+  B._aiTakeover = function (i, byHud) { // byHud：玩家自己按「代打」（不記離線）
+    const s = this.st, p = s.players[i]; p.isAI = true; p.auto = true; if (!byHud) this.log(`${p.name} 離線，改由電腦接手`);
     if (s.phase === 'bet' && this.bettors().includes(i) && !p.bet) this._after(800, () => this.setBet(i, this.aiBet(i)));
     if (s.phase === 'insure' && p.bet && p.insured === null) this._after(800, () => this.insure(i, false));
     if (s.phase === 'play' && s.turn === i) this.tick();
@@ -369,6 +369,9 @@ if (typeof Platform !== 'undefined') {
       buttons: Object.keys(Platform.cards.STYLE_NAMES).map(k => ({ label: Platform.cards.STYLE_NAMES[k] + (Platform.cards.style === k ? ' ✓' : ''), primary: Platform.cards.style === k,
         onClick: c => { c(); Platform.cards.setStyle(k); this._skin(); } })) });
     this._skin();
+    Platform.hud.mount(this, { root, bar: q('.bj-top'), me: () => this.O ? this.O.mySeat : 0,
+      seatEl: i => this._ui && (this._ui.seats.querySelector(`.bj-seat[data-i="${i}"]`) || (this.st && this.st.dealer === i ? this._ui.dealer : null)),
+      takeover: i => this._aiTakeover(i, true) });
   };
 
   // 一疊牌：新出現的牌飛入（delay 由呼叫端決定）；暗牌翻開時翻面
@@ -417,7 +420,7 @@ if (typeof Platform !== 'undefined') {
       const betN = p.hands.length ? p.hands.reduce((a, h) => a + h.bet, 0) : p.bet, newBet = P && !newRound && betN > (P.bets[i] || 0);
       const chips = betN ? chipsOf(betN).map((v, j) => `<i class="bj-chip c${v} ${newBet ? 'in' : ''}" style="--d:${j * 50}ms"></i>`).join('') + ` ${betN}`
         : s.phase === 'bet' && this.bettors().includes(i) ? '<span class="bj-wait">下注中…</span>' : '';
-      return `<div class="bj-seat ${i === me ? 'me' : ''} ${s.phase === 'play' && s.turn === i ? 'turn' : ''} ${s.phase !== 'bet' && !p.bet ? 'out' : ''}" ${side ? `data-side="${side}"` : ''}>
+      return `<div data-i="${i}" class="bj-seat ${i === me ? 'me' : ''} ${s.phase === 'play' && s.turn === i ? 'turn' : ''} ${s.phase !== 'bet' && !p.bet ? 'out' : ''}" ${side ? `data-side="${side}"` : ''}>
         <div class="bj-hands ${p.hands.length > 1 ? 'multi' : ''}">${hands}</div><div class="bj-bet">${chips}${p.insured ? '<span class="bj-ins">保險</span>' : ''}</div>
         <div class="bj-who"><div class="bj-ava">${esc(ini(p.name))}</div><div><div class="bj-nm">${esc(p.name)}</div><div class="bj-chips">$${p.chips}${this._netHTML(i)}</div></div></div></div>`;
     }).join('');
@@ -442,7 +445,10 @@ if (typeof Platform !== 'undefined') {
         buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.leave(); } }]
           : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.leave(); } }] });
     }
-    this._prev = { round: s.roundNo, phase: s.phase, turn: s.turn, hand: s.hand, hole: s.holeShown, bets: pl.map(p => p.hands.length ? p.hands.reduce((a, h) => a + h.bet, 0) : p.bet) };
+    // 語音報牌：新的一筆紀錄就唸出來（要牌／爆了／停牌／加倍／分牌／莊家…），去掉表情符號
+    if (P && s.logN > (P.logN || 0) && s.log[0]) Platform.voice.say(s.log[0].replace(/[\u{1F000}-\u{1FAFF}☀-➿]️?/gu, '').trim());
+    this._prev = { round: s.roundNo, phase: s.phase, turn: s.turn, hand: s.hand, hole: s.holeShown, logN: s.logN || 0, bets: pl.map(p => p.hands.length ? p.hands.reduce((a, h) => a + h.bet, 0) : p.bet) };
+    Platform.hud.sync();
     this._push();
   };
   B._netHTML = function (i) { const n = this.st.phase === 'settle' && this.st.lastNet ? this.st.lastNet[i] : 0; return n ? ` <span class="${n > 0 ? 'up' : 'dn'}">${n > 0 ? '+' : ''}${n}</span>` : ''; };
@@ -513,7 +519,7 @@ if (typeof Platform !== 'undefined') {
       if (opts && opts.online) B._startOnline(opts); else { B.O = null; B.newMatch('你'); }
     },
     unmount() {
-      B._clearTimers();
+      Platform.hud.unmount(); B._clearTimers();
       if (B._overModal) { B._overModal.close(); B._overModal = null; }
       B._root = null; B._ui = null; B.st = null; B.O = null; B._overShown = false;
     },

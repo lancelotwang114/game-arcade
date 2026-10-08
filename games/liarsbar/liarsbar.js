@@ -247,7 +247,7 @@ if (typeof Platform !== 'undefined') {
     const s = this.st;
     return JSON.parse(JSON.stringify({
       players: s.players.map((p, i) => ({
-        id: p.id, name: p.name, alive: p.alive, isAI: p.isAI,
+        id: p.id, name: p.name, alive: p.alive, isAI: p.isAI, auto: !!p.auto,
         hand: i === seat ? p.hand : p.hand.map(() => ({ hidden: true })),
         gun: { fired: p.gun.fired },
       })),
@@ -296,7 +296,7 @@ if (typeof Platform !== 'undefined') {
       const seat = this.O.seatOf[from]; if (seat == null) return;
       delete this.O.peerOf[seat]; delete this.O.seatOf[from]; this.O.names[seat] = null;
       if (this.O.started && this.st && this.st.players[seat]) {
-        const p = this.st.players[seat]; p.isAI = true; p._remote = false; this.log(`${p.name} 離線，改由電腦接手`);
+        const p = this.st.players[seat]; p.isAI = true; p.auto = true; p._remote = false; this.log(`${p.name} 離線，改由電腦接手`);
         if (this.st.turn === seat && this.st.phase === 'play') this.tick();
         this.render();
       } else this._renderRoom();
@@ -464,6 +464,9 @@ if (typeof Platform !== 'undefined') {
     sndIcon();
     U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); this.sfx.ambience(Platform.audio.enabled); };
     q('.lb-logbtn').onclick = () => U.log.classList.toggle('open');
+    const me = () => this.O ? this.O.mySeat : 0;
+    Platform.hud.mount(this, { root, bar: q('.lb-top'), me,
+      seatEl: i => { const n = this.st ? this.st.players.length : 0; return n && this._ui ? this._ui.seat[(i - me() + n) % n] : null; } });
   };
 
   // ---------- 3D 角色（lb3d.js 動態載入；WebGL／CDN 失敗就維持 2D 畫面＋輪盤）----------
@@ -590,7 +593,7 @@ if (typeof Platform !== 'undefined') {
         U.bub.forEach(b => { if (!b.classList.contains('liar')) b.className = 'lb-bub'; });
         for (let j = 0; j < dec; j++) { this._fly(k ? U.ava[k] : U.hand, U.pile, backHTML('', '--w:44px'), 380, j * 160); this.sfx.play(k ? 'place' : 'shove', { gain: .7, when: j * .16 }); }
         this._pileAdd(dec, 380);
-        this._say(k, `${dec} 張 ${faceOf(s.tableRank)}`);
+        this._say(k, `${dec} 張 ${faceOf(s.tableRank)}`); Platform.voice.say(`${dec} 張 ${faceOf(s.tableRank)}`);
         if (this._3d && k) this._3d.act(k, 'play');
         U.claim.textContent = `「這 ${dec} 張，都是 ${faceOf(s.tableRank)}」— ${pl[by].name}`;
         t = 380 + dec * 160;
@@ -598,7 +601,7 @@ if (typeof Platform !== 'undefined') {
       // ---- 喊騙子：拍桌 + 印章，逐張翻開上一手 ----
       if (s._reveal && !P.reveal) {
         const ch = s._challenger, cards = s._reveal, rank = s.tableRank;
-        this._say(pos(ch), '騙子！', 'liar');
+        this._say(pos(ch), '騙子！', 'liar'); Platform.voice.say('騙子！');
         if (this._3d) { const ck = pos(ch); if (ck) this._3d.act(ck, 'liar'); [1, 2, 3].forEach(j => { if (j !== ck) this._3d.look(j, ck || 'me'); }); } // 拍桌；其他人（含被指控的）看向喊的人
         this.sfx.play('slam', { gain: 1 }); restart(U.stamp, 'show'); restart(U.app, 'shake'); this.sfx.duck(.08, .3);
         let kids = [...U.pile.children]; if (kids.length < cards.length) { this._pileAdd(cards.length - kids.length, 0); kids = [...U.pile.children]; }
@@ -616,7 +619,7 @@ if (typeof Platform !== 'undefined') {
         const sh = s._shot, i = sh.seat;
         this._pend = { seat: i, fired: sh.fired, until: Date.now() + ROULETTE_OUT + 50 };
         paintSeat(i);
-        const reveal = () => { this._pend = null; paintSeat(i); this._paintLog(); };
+        const reveal = () => { this._pend = null; paintSeat(i); this._paintLog(); Platform.voice.say(`${pl[i].name}${sh.hit ? ' 中彈' : ' 空膛'}`); };
         if (this._3d) this._shot3d(pos(i), sh.hit, reveal, pl[i].name); else this._roulette(pos(i), pl[i].name, sh.fired - 1, sh.hit, reveal);
       }
     }
@@ -674,6 +677,7 @@ if (typeof Platform !== 'undefined') {
     if (this._3d && s.phase === 'over' && P && P.phase !== 'over') { const w = pl.findIndex(p => p.alive); if (w >= 0 && pos(w)) this._fx(() => this._3d.act(pos(w), 'cheer'), 600); }
     this._sync3d();
     this._prev = { round: s.roundNo, total, reveal: !!s._reveal, shot: !!s._shot, phase: s.phase };
+    Platform.hud.sync();
     this._push(); // host 同步狀態給賓客
   };
   // 手牌選取外觀 + 「蓋牌宣稱」按鈕文字
@@ -706,7 +710,7 @@ if (typeof Platform !== 'undefined') {
       if (opts && opts.online) { LiarsBar._startOnline(opts); }
       else { LiarsBar.O = null; LiarsBar.newMatch('你'); LiarsBar.render(); LiarsBar.tick(); }
     },
-    unmount() { if (LiarsBar._3d) { LiarsBar._3d.dispose(); LiarsBar._3d = null; } LiarsBar._3dp = null; LiarsBar._clearTimers(); LiarsBar._clearFx(); LiarsBar.sfx.ambience(false); LiarsBar._root = null; LiarsBar._ui = null; LiarsBar.st = null; LiarsBar._reveal = null; LiarsBar.O = null; LiarsBar._overShown = false; },
+    unmount() { Platform.hud.unmount(); if (LiarsBar._3d) { LiarsBar._3d.dispose(); LiarsBar._3d = null; } LiarsBar._3dp = null; LiarsBar._clearTimers(); LiarsBar._clearFx(); LiarsBar.sfx.ambience(false); LiarsBar._root = null; LiarsBar._ui = null; LiarsBar.st = null; LiarsBar._reveal = null; LiarsBar.O = null; LiarsBar._overShown = false; },
   });
 }
 

@@ -400,7 +400,7 @@ if (typeof Platform !== 'undefined') {
     const s = this.st, reveal = !!s._reveal;
     return JSON.parse(JSON.stringify({
       players: s.players.map((p, i) => ({
-        id: p.id, name: p.name, isAI: p.isAI, chips: p.chips, bet: p.bet, totalInvested: p.totalInvested,
+        id: p.id, name: p.name, isAI: p.isAI, auto: !!p.auto, chips: p.chips, bet: p.bet, totalInvested: p.totalInvested,
         folded: p.folded, allin: p.allin, acted: p.acted, last: p.last,
         hole: (i === seat || (reveal && !p.folded)) ? p.hole : p.hole.map(() => ({ hidden: true })),
       })),
@@ -441,7 +441,7 @@ if (typeof Platform !== 'undefined') {
       const seat = this.O.seatOf[from]; if (seat == null) return;
       delete this.O.peerOf[seat]; delete this.O.seatOf[from]; this.O.names[seat] = null;
       if (this.O.started && this.st && this.st.players[seat]) {
-        const p = this.st.players[seat]; p.isAI = true; p._remote = false; this.log(`${p.name} 離線，改由電腦接手`);
+        const p = this.st.players[seat]; p.isAI = true; p.auto = true; p._remote = false; this.log(`${p.name} 離線，改由電腦接手`);
         if (this.st.toAct === seat) this._after(900, () => this.aiAct(seat)); else this.render();
       } else this._renderRoom();
       Platform.net.broadcast('lobby', { names: this.O.names });
@@ -649,6 +649,10 @@ if (typeof Platform !== 'undefined') {
     q('.tx-rminus').onclick = () => this._setR(this._R.v - 10);
     q('.tx-rplus').onclick = () => this._setR(this._R.v + 10);
     this._skin();
+    const me = () => this.O ? this.O.mySeat : 0;
+    Platform.hud.mount(this, { root, bar: q('.tx-top'), me,
+      seatEl: i => { const n = this.st ? this.st.players.length : 0; return n && this._ui ? this._ui.seat[(i - me() + n) % n] : null; },
+      takeover: i => { if (this.st.toAct === i) this._after(600 * this.AI_SPEED, () => this.aiAct(i)); } });
   };
 
   // ---------- 加注面板 ----------
@@ -745,7 +749,7 @@ if (typeof Platform !== 'undefined') {
         U.slots[k].innerHTML = cardHTML(s.board[k], 'in', `--d:${at}ms`);
         this.sfx.play('card-place', { when: at / 1000 });
       }
-      if (s.board.length > P.boardLen) t += (s.board.length - P.boardLen) * 450 + 150;
+      if (s.board.length > P.boardLen) { t += (s.board.length - P.boardLen) * 450 + 150; Platform.voice.say({ 3: '翻牌', 4: '轉牌', 5: '河牌' }[s.board.length]); }
       // ---- 每位玩家的新動作：氣泡 + 音效 + 籌碼 ----
       pl.forEach((p, i) => {
         const k = pos(i);
@@ -755,6 +759,7 @@ if (typeof Platform !== 'undefined') {
         }
         if (!p.last || !((p.acted && !P.acted[i]) || p.last !== P.last[i])) return;
         this._pop(U.bub[k], actText(p.last), actKind(p.last));
+        Platform.voice.say(actText(p.last)); // 語音報：跟注 20／加注到 100／全下／過牌／蓋牌
         if (p.last === '過牌') this.sfx.knock();
         if (p.folded && !P.folded[i]) {
           this.sfx.play('card-shove', { gain: .7 });
@@ -788,7 +793,7 @@ if (typeof Platform !== 'undefined') {
           sub = iWin ? `你贏得 ${gain(me)}` : `${h.name} · 贏得 ${win.reduce((a, i) => a + gain(i), 0)}`;
         }
         this._count(U.potv, total, 400, Math.min(t, 600));
-        this._fx(() => { U.banner.firstChild.textContent = head; U.banner.lastChild.textContent = sub; U.banner.className = 'tx-banner'; void U.banner.offsetWidth; U.banner.classList.add('show'); }, t);
+        this._fx(() => { U.banner.firstChild.textContent = head; U.banner.lastChild.textContent = sub; U.banner.className = 'tx-banner'; void U.banner.offsetWidth; U.banner.classList.add('show'); Platform.voice.say(sub); }, t);
         payT = t + 900;
         win.forEach((i, w) => {
           for (let c = 0; c < 6; c++) this._fly(U.pot, U.ava[pos(i)], '<span class="tx-chip gold"></span>', 750, payT + c * 140 + w * 60);
@@ -874,6 +879,7 @@ if (typeof Platform !== 'undefined') {
       hand: s.handNo, street: s.street, boardLen: s.board.length, reveal: !!s._reveal, toAct: s.toAct, myTurn: !!myTurn,
       bet: pl.map(p => p.bet), chips: pl.map(p => p.chips), inv: pl.map(p => p.totalInvested), folded: pl.map(p => !!p.folded), acted: pl.map(p => !!p.acted), last: pl.map(p => p.last),
     };
+    Platform.hud.sync();
     this._push(); // host 同步給賓客
   };
 
@@ -899,6 +905,6 @@ if (typeof Platform !== 'undefined') {
       if (opts && opts.online) { Texas._startOnline(opts); }
       else { Texas.O = null; Texas.newMatch('你'); }
     },
-    unmount() { Texas._clearTimers(); Texas._clearFx(); Texas._root = null; Texas._ui = null; Texas.st = null; Texas.O = null; Texas._overShown = false; },
+    unmount() { Platform.hud.unmount(); Texas._clearTimers(); Texas._clearFx(); Texas._root = null; Texas._ui = null; Texas.st = null; Texas.O = null; Texas._overShown = false; },
   });
 }

@@ -113,7 +113,8 @@ Platform.hud = {
     const G = this.G, st = G.st, p = st && st.players[i]; if (!p) return;
     p.auto = !!on; p.isAI = !!on;
     const turn = st.toAct != null ? st.toAct : st.turn;
-    if (turn === i && !G._paused) (this.o.takeover || (() => G.tick && G.tick()))(i);
+    if (on && this.o.takeover) this.o.takeover(i);                 // 遊戲自訂接手（如 21 點下注／保險階段）
+    else if (turn === i) { if (G.tick) G.tick(); }                 // 輪到他：電腦接手出這一步；交還玩家則重新開始行動限時
     if (G.render) G.render(); if (G._push) G._push();
   },
 

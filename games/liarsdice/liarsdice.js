@@ -180,7 +180,7 @@ if (typeof Platform !== 'undefined') {
   L._redact = function (seat) {
     const s = this.st, open = s.phase === 'reveal' || s.phase === 'shoot' || s.phase === 'over';
     return JSON.parse(JSON.stringify({
-      players: s.players.map((p, i) => ({ id: p.id, name: p.name, isAI: p.isAI, alive: p.alive, gun: { fired: p.gun.fired },
+      players: s.players.map((p, i) => ({ id: p.id, name: p.name, isAI: p.isAI, auto: !!p.auto, alive: p.alive, gun: { fired: p.gun.fired },
         dice: (i === seat || open) ? p.dice : p.dice.map(() => 0) })),
       roundNo: s.roundNo, turn: s.turn, bid: s.bid, bids: s.bids, oneCalled: s.oneCalled, phase: s.phase, log: s.log, _reveal: s._reveal, _shot: s._shot,
     }));
@@ -207,7 +207,7 @@ if (typeof Platform !== 'undefined') {
       const seat = this.O.seatOf[from]; if (seat == null) return;
       delete this.O.peerOf[seat]; delete this.O.seatOf[from]; this.O.names[seat] = null;
       if (this.O.started && this.st && this.st.players[seat]) {
-        const p = this.st.players[seat]; p.isAI = true; this.log(`${p.name} 離線，改由電腦接手`);
+        const p = this.st.players[seat]; p.isAI = true; p.auto = true; this.log(`${p.name} 離線，改由電腦接手`);
         if (this.st.turn === seat) this.tick(); this.render();
       } else this._renderRoom();
       Platform.net.broadcast('lobby', { names: this.O.names });
@@ -282,6 +282,8 @@ if (typeof Platform !== 'undefined') {
     U.qm.onclick = () => { this._q--; this._paintPanel(); }; U.qp.onclick = () => { this._q++; this._paintPanel(); };
     U.fbtn.forEach(b => b.onclick = () => { this._f = +b.dataset.f; this.sfx.play('grab', { gain: .25, rate: 1.3 }); this._paintPanel(); });
     U.bid.onclick = () => this._send('bid'); U.open.onclick = () => this._send('open');
+    Platform.hud.mount(this, { root, bar: q('.ld-top'), me: () => this.O ? this.O.mySeat : 0,
+      seatEl: i => this._ui ? this._ui.seat[(i - (this.O ? this.O.mySeat : 0) + 4) % 4] : null });
   };
 
   // ---------- 叫價面板 ----------
@@ -339,7 +341,7 @@ if (typeof Platform !== 'undefined') {
     }
     // 新叫價
     if (P && !newRound && s.bids.length > P.bids) {
-      const b = s.bid; this._say(pos(b.by), `${b.q} 個 ${b.f}`); sfx.play('chip', { gain: .7 });
+      const b = s.bid; this._say(pos(b.by), `${b.q} 個 ${b.f}`); Platform.voice.say(`${b.q} 個 ${b.f}`); sfx.play('chip', { gain: .7 });
       if (b.by !== me) { this._q = +b.q; this._f = +b.f; }
     }
     this._normalize();
@@ -349,7 +351,7 @@ if (typeof Platform !== 'undefined') {
     if (s._reveal && P && !P.reveal) {
       const r = s._reveal, f = s.bid.f, wild = r.wild && f !== 1;
       U.bub.forEach(b => { b.className = 'ld-bub'; }); // 收起叫價泡泡，別擋住掀開的骰子
-      this._say(pos(r.by), '開！', 'open'); sfx.play('slam', { gain: 1 }); sfx.duck(.08, .3);
+      this._say(pos(r.by), '開！', 'open'); Platform.voice.say('開！'); sfx.play('slam', { gain: 1 }); sfx.duck(.08, .3);
       Platform.fx.restart(U.stamp, 'show'); Platform.fx.restart(U.app, 'shake');
       let n = 0, t = 900;
       [0, 1, 2, 3].map(k => (k + me) % 4).forEach(i => {
@@ -381,6 +383,7 @@ if (typeof Platform !== 'undefined') {
           : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.leave(); } }] });
     }
     this._prev = { round: s.roundNo, bids: s.bids.length, reveal: !!s._reveal, shot: !!s._shot, turn: s.turn };
+    Platform.hud.sync();
     this._push();
   };
   // 場上顆數、面板、紀錄：輪盤演出中不透露中彈結果
@@ -428,7 +431,7 @@ if (typeof Platform !== 'undefined') {
       if (opts && opts.online) L._startOnline(opts); else { L.O = null; L.newMatch('你'); }
     },
     unmount() {
-      L._clearTimers(); if (L._tl) L._tl.clear(); L.sfx.ambience(false);
+      Platform.hud.unmount(); L._clearTimers(); if (L._tl) L._tl.clear(); L.sfx.ambience(false);
       if (L._overModal) { L._overModal.close(); L._overModal = null; }
       L._root = null; L._ui = null; L.st = null; L.O = null; L._overShown = false;
     },
