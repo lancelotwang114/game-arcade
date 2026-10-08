@@ -7,7 +7,7 @@
    - 順子：23456 最大、A2345 第二，其餘依最大一張；JQKA2、QKA23、KA234 不算順子。同順子比最大那張的花色。
    - 開局：每局都由持梅花 3 者先出，第一手必須包含梅花 3。
    - 一輪中「過」了就不能再出，直到其他人都過、最後出牌者取得出牌權（可出任何牌型），才開始新的一輪。
-   - 結算：輸家扣剩餘張數；剩 10 張以上 ×2、13 張全沒出 ×3；手上有 2 再 ×2。累計先到目標分數者輸，遊戲結束。 */
+   - 結算：輸家依剩餘張數計點（剩 10 張以上 ×2、13 張全沒出 ×3；手上有 2 再 ×2），點數 × 每點金額付給贏家；有人籌碼輸光即結束。 */
 const BigTwo = {
   RANKS: ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'],
   SUITS: ['c', 'd', 'h', 's'],                // 梅花 < 方塊 < 紅心 < 黑桃
@@ -15,7 +15,7 @@ const BigTwo = {
   cv(c) { return this.rv(c.r) * 4 + this.SUITS.indexOf(c.s); }, // 單張比較值
   TYPE_NAME: { single: '單張', pair: '對子', straight: '順子', fullhouse: '葫蘆', four: '鐵支', sflush: '同花順' },
   FIVE_ORDER: ['straight', 'fullhouse', 'four', 'sflush'],
-  TARGET: 60,
+  START: 1000, UNIT: 10, // 起始籌碼、每點金額（房間設定）
 
   // ---------- 牌型判定（純函式）----------
   // 順子：回傳比較鍵（越大越強），不是順子回傳 0。23456 = 17、A2345 = 16、其餘 = 最大點數（7..14）
@@ -100,7 +100,7 @@ const BigTwo = {
   st: null, _timers: [],
   newMatch(human = '你') {
     const names = [human, '阿傑', '小琪', '老王'];
-    this.st = { players: names.map((nm, i) => ({ id: i, name: nm, isAI: i !== 0, hand: [], score: 0, last: '' })),
+    this.st = { players: names.map((nm, i) => ({ id: i, name: nm, isAI: i !== 0, hand: [], chips: this.START, last: '' })),
       handNo: 0, turn: 0, table: null, passes: 0, leader: -1, first: true, phase: 'idle', log: [], winner: -1, lastWinner: -1 };
     this.newHand();
   },
@@ -155,12 +155,13 @@ const BigTwo = {
     if (this.render) this.render(); this.tick(); },
   _endHand(w) {
     const s = this.st; s.phase = 'scored'; s.winner = w; s.lastWinner = w;
-    const res = s.players.map((p, i) => i === w ? 0 : this.penalty(p.hand));
-    s.players.forEach((p, i) => { p.score += res[i]; });
+    // 輸家依剩牌點數 × 每張金額付給贏家（籌碼不夠就付光）
+    const res = s.players.map((p, i) => i === w ? 0 : Math.min(p.chips, this.penalty(p.hand) * this.UNIT));
+    s.players.forEach((p, i) => { p.chips -= res[i]; }); s.players[w].chips += res.reduce((a, b) => a + b, 0);
     s.lastResult = res;
-    this.log(`🏆 ${s.players[w].name} 出完了！` + s.players.map((p, i) => i === w ? '' : `${p.name} −${res[i]}`).filter(Boolean).join('，'));
+    this.log(`🏆 ${s.players[w].name} 出完了！` + s.players.map((p, i) => i === w ? '' : `${p.name} −$${res[i]}`).filter(Boolean).join('，'));
     if (this.render) this.render();
-    if (s.players.some(p => p.score >= this.TARGET)) { this._after(3500, () => { s.phase = 'over'; if (this.render) this.render(); }); return; }
+    if (s.players.some(p => p.chips <= 0)) { this._after(3500, () => { s.phase = 'over'; if (this.render) this.render(); }); return; } // 有人輸光：整場結束
     this._after(4500, () => this.newHand());
   },
   tick() {
@@ -241,6 +242,12 @@ if (typeof module !== 'undefined' && require.main === module) {
     Object.assign(s, { turn: 0, leader: 0, table: null, passes: 0, passed: [false, false, false, false] });
     assert.ok(B.legalPlays(R[0], null, null, B.baoPai(0)).every(cs => cs.length > 1 || cs[0] === R[0][2]), '報牌時只列最大單張');
     assert.ok(!B.play(0, [R[0][0]]), '報牌時不能出小單張'); assert.ok(B.play(0, [R[0][2]]), '報牌時可出最大單張');
+    // 籌碼結算：點數 × 每點金額付給贏家，不夠就付光並結束
+    const af = B._after; B._after = () => {}; B.UNIT = 10;
+    const Q = ['', '3c 4d', '2s', '3d 4h 5s'].map(x => x ? C(x) : []); s.players.forEach((p, i) => { p.hand = Q[i]; p.chips = 100; }); s.players[3].chips = 20;
+    B._endHand(0);
+    assert.deepStrictEqual(s.players.map(p => p.chips), [100 + 20 + 20 + 20, 80, 80, 0], '輸家付 張數×(2加倍)×10，籌碼不夠付光');
+    B._after = af;
     B.tick = tk; }
   // 結算
   assert.strictEqual(B.penalty(C('3c 4d 5h')), 3); assert.strictEqual(B.penalty(C('3c 4d 2h')), 6, '有 2 ×2');
@@ -277,12 +284,13 @@ if (typeof Platform !== 'undefined') {
     'place-1': 'card-place-1.wav', 'place-2': 'card-place-2.wav', 'place-3': 'card-place-3.wav', 'shove-1': 'card-shove-1.wav', 'shove-2': 'card-shove-2.wav',
     'slam-1': 'slam-1.wav', 'slam-2': 'slam-2.wav', toast: 'toast-1.mp3',
   });
+  B.chipSfx = Platform.fx.sampler('core/sfx/', { 'chips-stack-1': 'chips-stack-1.wav', 'chips-stack-2': 'chips-stack-2.wav', 'chips-handle-1': 'chips-handle-1.wav' }); // 結算收籌碼（共用德州音效）
 
   // ---------- 連線：對賓客遮蔽他人手牌（結算時公開）----------
   B._redact = function (seat) {
     const s = this.st, open = s.phase === 'scored' || s.phase === 'over';
     return JSON.parse(JSON.stringify({
-      players: s.players.map((p, i) => ({ id: p.id, name: p.name, isAI: p.isAI, score: p.score, last: p.last,
+      players: s.players.map((p, i) => ({ id: p.id, name: p.name, isAI: p.isAI, chips: p.chips, last: p.last,
         hand: (i === seat || open) ? p.hand : p.hand.map(() => ({ hidden: true })) })),
       handNo: s.handNo, turn: s.turn, table: s.table, trick: s.trick || [], passes: s.passes, leader: s.leader, first: s.first,
       phase: s.phase, log: s.log, winner: s.winner, lastWinner: s.lastWinner, lastResult: s.lastResult || null, passSeq: s.passSeq || 0, lastPassBy: s.lastPassBy, passed: s.passed,
@@ -294,7 +302,7 @@ if (typeof Platform !== 'undefined') {
   };
   B._newMatchOnline = function () {
     const names = this.O.names;
-    this.st = { players: [0, 1, 2, 3].map(i => ({ id: i, name: names[i] || ['', '阿傑', '小琪', '老王'][i], isAI: !(i === 0 || names[i] != null), hand: [], score: 0, last: '' })),
+    this.st = { players: [0, 1, 2, 3].map(i => ({ id: i, name: names[i] || ['', '阿傑', '小琪', '老王'][i], isAI: !(i === 0 || names[i] != null), hand: [], chips: this.START, last: '' })),
       handNo: 0, turn: 0, table: null, trick: [], passes: 0, leader: -1, first: true, phase: 'idle', log: [], winner: -1, lastWinner: -1 };
     this._overShown = false;
     this.newHand();
@@ -361,7 +369,7 @@ if (typeof Platform !== 'undefined') {
     root.innerHTML = `<div class="b2-app">
       <header class="b2-top">
         <div class="b2-brand">大老二</div>
-        <div class="b2-info">第 <b class="b2-hno">1</b> 局<span class="b2-target"> · 先到 ${B.TARGET} 分者輸</span></div>
+        <div class="b2-info">第 <b class="b2-hno">1</b> 局<span class="b2-target"> · 每點 $${B.UNIT}，有人輸光即結束</span></div>
         <button class="b2-ibtn b2-snd" aria-label="音效開關"></button>
         <button class="b2-ibtn b2-style" aria-label="牌面風格">🎴</button>
         <button class="b2-ibtn b2-logbtn" aria-label="牌局紀錄">☰</button>
@@ -473,11 +481,12 @@ if (typeof Platform !== 'undefined') {
       const row = document.createElement('div'); row.className = 'b2-rrow' + (i === w ? ' win' : '');
       const nm = document.createElement('div'); nm.className = 'b2-rname'; nm.textContent = p.name + (i === w ? ' 🏆' : '');
       const cs = document.createElement('div'); cs.className = 'b2-rcards'; cs.innerHTML = p.hand.filter(known).map(c => cardHTML(c)).join('');
-      const pen = document.createElement('b'); pen.textContent = i === w ? '' : `−${res[i]}`;
-      const tot = document.createElement('span'); tot.textContent = `累計 ${p.score}`;
+      const pen = document.createElement('b'); pen.textContent = i === w ? `+$${res.reduce((a, b) => a + b, 0)}` : `−$${res[i]}`; if (i === w) pen.className = 'gain';
+      const tot = document.createElement('span'); tot.textContent = `剩 $${p.chips}`;
       row.append(nm, cs, pen, tot); U.rbox.append(row);
     });
     U.result.classList.add('on'); this.sfx.play('toast', { gain: .5 });
+    for (let c = 0; c < 4; c++) this.chipSfx.play('chips-stack', { when: .35 + c * .13, gain: .7 }); this.chipSfx.play('chips-handle', { when: .9 });
   };
 
   // ---------- 主渲染：依前後狀態差異觸發動畫 ----------
@@ -494,7 +503,7 @@ if (typeof Platform !== 'undefined') {
     pl.forEach((p, i) => {
       const k = pos(i), el = U.seat[k];
       el.querySelector('.b2-ini').textContent = ini(p.name); el.querySelector('.b2-nm').textContent = p.name;
-      el.querySelector('.b2-score').textContent = `${p.score} 分`;
+      el.querySelector('.b2-score').textContent = `$${p.chips}`;
       if (k) {
         const n = p.hand.length, c = el.querySelector('.b2-cnt'); c.querySelector('b').textContent = n; c.classList.toggle('low', n > 0 && n <= 3);
         const fb = el.querySelector('.b2-fanback');
@@ -561,11 +570,11 @@ if (typeof Platform !== 'undefined') {
     // 整場結束
     if (s.phase === 'over' && !this._overShown) {
       this._overShown = true;
-      const best = pl.reduce((a, b) => b.score < a.score ? b : a), iWin = best.id === me;
+      const best = pl.reduce((a, b) => b.chips > a.chips ? b : a), iWin = best.id === me;
       Platform.audio && (iWin ? Platform.audio.win() : Platform.audio.lose());
       const isGuest = O && !O.isHost;
-      this._overModal = Platform.ui.modal({ title: iWin ? '🏆 你是最低分！' : '遊戲結束',
-        html: `最低分：<b>${best.name.replace(/[<>&"']/g, '')}</b>（${best.score} 分）`,
+      this._overModal = Platform.ui.modal({ title: iWin ? '🏆 你贏最多！' : '遊戲結束',
+        html: `籌碼最多：<b>${best.name.replace(/[<>&"']/g, '')}</b>（$${best.chips}）`,
         buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.leave(); } }]
           : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.leave(); } }] });
     }
@@ -587,11 +596,11 @@ if (typeof Platform !== 'undefined') {
     id: 'bigtwo', name: '大老二', icon: '🂡',
     desc: '台灣大老二：對子、順子、葫蘆、鐵支炸彈', players: { min: 2, max: 4 },
     online: true,
-    target: B, settings: [{ k: 'TARGET', label: '結束分數', def: 60, min: 10, max: 300, step: 10 }],
+    target: B, settings: [{ k: 'START', label: '起始籌碼', def: 1000, min: 100, max: 100000, step: 100 }, { k: 'UNIT', label: '每點金額', def: 10, min: 1, max: 1000 }],
     mount(stage, opts) {
       const root = document.createElement('div'); root.id = 'b2-root'; root.className = 'b2-root'; stage.appendChild(root);
       B._root = root; B._human = '你'; B._prev = null; B._overShown = false; B._tl = Platform.fx.timeline(root);
-      B.sfx.unlock(); B.sfx.load();
+      B.sfx.unlock(); B.sfx.load(); B.chipSfx.load();
       root.addEventListener('pointerdown', () => B.sfx.unlock(), { passive: true });
       root.addEventListener('click', e => {
         const U = B._ui; if (!U) return;

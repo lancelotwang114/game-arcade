@@ -130,7 +130,7 @@
 .b2-rrow.win .b2-rname { color: var(--accent); }
 .b2-rname { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .b2-rcards { display: flex; min-width: 0; overflow: hidden; } .b2-rcards .b2-card { --w: 26px; margin-left: -15px; } .b2-rcards .b2-card:first-child { margin-left: 0; }
-.b2-rrow b { font: 700 18px var(--o); color: var(--bad); }
+.b2-rrow b { font: 700 18px var(--o); color: var(--bad); } .b2-rrow b.gain { color: var(--accent); }
 .b2-rrow span { font: 500 13px var(--o); color: var(--muted); white-space: nowrap; }
 
 /* 紀錄抽屜 */
