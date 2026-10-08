@@ -118,6 +118,34 @@
 .b2-seat.bao .b2-cnt b { color: var(--bad); animation: b2Blink .8s steps(2) infinite; }
 .b2-seat.bao .b2-pod::after { content: '報牌'; position: absolute; top: -10px; right: -8px; padding: 1px 8px; border-radius: 99px; background: var(--bad); color: #fff; font: 700 12px 'Noto Sans TC', sans-serif; box-shadow: 0 0 12px var(--bad); }
 @keyframes b2Blink { 50% { opacity: .25; } }
+/* 炸彈牌型字更大更亮 */
+.b2-type.bomb { color: #fff; font-size: clamp(26px, 4cqi, 40px); text-shadow: 0 0 12px #8cf, 0 0 28px #48f; }
+/* 閃電特效（_bolt）：白光一閃 + 鋸齒閃電描邊 + 中央印章 */
+.b2-fx { position: absolute; inset: 0; z-index: 25; pointer-events: none; }
+.b2-fx svg { position: absolute; inset: 0; overflow: visible; }
+.b2-fx path { fill: none; stroke: #fff; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 0 6px #9cf) drop-shadow(0 0 16px #5af);
+  stroke-dasharray: 3000; stroke-dashoffset: 3000; opacity: 0; animation: b2Bolt .9s var(--d, 0ms) ease-out forwards; }
+@keyframes b2Bolt { 1% { opacity: 1; } 18% { stroke-dashoffset: 0; opacity: 1; } 30% { opacity: .25; } 42% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+.b2-flash { position: absolute; inset: 0; background: #fff; opacity: 0; animation: b2Flash .7s ease-out; }
+@keyframes b2Flash { 12% { opacity: .6; } 100% { opacity: 0; } }
+.b2-wstamp { position: absolute; left: 50%; top: 42%; translate: -50% -50%; padding: 10px 28px; border: 4px solid var(--accent); border-radius: 14px; background: rgba(0,0,0,.55);
+  color: var(--accent); font: 900 clamp(28px, 6vmin, 56px) 'Noto Serif TC', serif; letter-spacing: .12em; white-space: nowrap; text-shadow: 0 0 18px var(--glow);
+  animation: b2Stamp 1.9s cubic-bezier(.2,1.6,.4,1) forwards; }
+@keyframes b2Stamp { 0% { opacity: 0; scale: 2.4; rotate: -8deg; } 18% { opacity: 1; scale: 1; rotate: -4deg; } 80% { opacity: 1; } 100% { opacity: 0; scale: 1.05; rotate: -4deg; } }
+/* 贏家座位金色光環 */
+.b2-seat.win .b2-pod, .b2-me.win { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 36px var(--glow), 0 0 70px var(--glow); }
+/* 取得出牌權：手牌往上彈一下 */
+.b2-hand.hop { animation: b2Hop .5s cubic-bezier(.2,1.6,.4,1); }
+@keyframes b2Hop { 40% { translate: 0 -14px; } }
+/* 輪到自己：手牌底下金光呼吸 */
+.b2-app.myturn .b2-hand { background: radial-gradient(ellipse 60% 70% at 50% 100%, rgba(231,196,110,.2), transparent 70%); animation: b2Glow 1.6s ease-in-out infinite alternate; }
+@keyframes b2Glow { to { background-color: rgba(231,196,110,.03); } }
+/* 桌機懸浮：牌浮起；牌型按鈕預覽的牌亮框 */
+@media (hover: hover) {
+  .b2-hand .b2-card:not(.sel):hover { transform: translateY(-10px); filter: brightness(1.08); } /* 扇形用 inline rotate/translate，這裡用 transform 疊加 */
+  .b2-chips .b2-chip:hover { background: rgba(231,196,110,.2); }
+}
+.b2-hand .b2-card.peek:not(.sel) { transform: translateY(-10px); box-shadow: 0 0 0 3px #8cf, 0 10px 18px rgba(0,0,0,.5); }
 /* 這輪已過：座位變灰 */
 .b2-seat.passed:not(.bao) .b2-pod { opacity: .45; filter: grayscale(1); } /* 報牌優先，不蓋暗 */
 

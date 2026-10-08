@@ -403,6 +403,12 @@ if (typeof Platform !== 'undefined') {
     };
     U.ava = U.seat.map(e => e.querySelector('.b2-ava')); U.bub = U.seat.map(e => e.querySelector('.b2-bub'));
     this._prev = null; this._sel = new Set(); this._cyc = {}; this._apKey = '';
+    // 滑鼠移到牌型按鈕：先預覽點下去會選到的那一組
+    U.chips.forEach(ch => {
+      ch.onmouseenter = () => { const cs = ((this._chipPool || {})[ch.dataset.t] || []).slice().sort((a, b) => B._cmpKey(B.classify(a).key, B.classify(b).key))[0]; if (!cs) return;
+        const ks = new Set(cs.map(key)); U.hand.querySelectorAll('.b2-card').forEach(el => el.classList.toggle('peek', ks.has(el.dataset.k))); };
+      ch.onmouseleave = () => U.hand.querySelectorAll('.peek').forEach(el => el.classList.remove('peek'));
+    });
     const sndIcon = () => { U.snd.textContent = Platform.audio.enabled ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(Platform.audio.enabled)); };
     sndIcon(); U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); };
     q('.b2-logbtn').onclick = () => U.log.classList.add('open'); q('.b2-logx').onclick = () => U.log.classList.remove('open');
@@ -474,6 +480,23 @@ if (typeof Platform !== 'undefined') {
     const cyc = this._cyc[tp]; this._cyc = { [tp]: cyc };
   };
 
+  // ---------- 閃電：從畫面上方劈向 target（贏牌 / 炸彈）；stamp = 中央印章文字 ----------
+  B._bolt = function (target, n = 1, stamp = '') {
+    const root = this._root; if (!root || !target || Platform.fx.reduced()) { if (stamp && root) Platform.toast(stamp); return; }
+    const R = root.getBoundingClientRect(), T = target.getBoundingClientRect();
+    const tx = T.left + T.width / 2 - R.left, ty = T.top + T.height / 2 - R.top;
+    let paths = '';
+    for (let b = 0; b < n; b++) {
+      let x = tx + (Math.random() - .5) * R.width * .6, y = 0, d = `M${x.toFixed(1)} 0`;
+      for (let i = 1, N = 9; i <= N; i++) { y = ty * i / N; x += (tx - x) / (N - i + 1) + (i < N ? (Math.random() - .5) * 70 : 0); d += ` L${x.toFixed(1)} ${y.toFixed(1)}`; } // 鋸齒、最後一段收到目標
+      paths += `<path d="${d}" style="--d:${b * 140}ms"/>`;
+    }
+    const fx = document.createElement('div'); fx.className = 'b2-fx'; fx.setAttribute('aria-hidden', 'true');
+    fx.innerHTML = `<div class="b2-flash"></div><svg width="${R.width}" height="${R.height}">${paths}</svg>${stamp ? '<div class="b2-wstamp"></div>' : ''}`;
+    if (stamp) fx.querySelector('.b2-wstamp').textContent = stamp;
+    root.appendChild(fx); setTimeout(() => fx.remove(), stamp ? 1900 : 1000);
+  };
+
   // ---------- 結算面板 ----------
   B._showResult = function () {
     const U = this._ui, s = this.st, w = s.winner, res = s.lastResult || [];
@@ -519,6 +542,7 @@ if (typeof Platform !== 'undefined') {
     if (newHand) {
       tl.clear(); this._sel = new Set(); this._cyc = {};
       U.spot.forEach(sp => { sp.innerHTML = ''; sp.className = 'b2-spot'; }); U.type.textContent = ''; U.result.classList.remove('on');
+      U.seat.forEach(e => e.classList.remove('win'));
       U.bub.forEach(b => { b.className = 'b2-bub'; });
       this.sfx.play('shuffle', { gain: .6 });
       const delays = []; for (let r = 0; r < 13; r++) for (let k = 0; k < 4; k++) {
@@ -536,9 +560,9 @@ if (typeof Platform !== 'undefined') {
         sp.innerHTML = e.cards.map((c, j) => cardHTML(c, 'in', `--d:${240 + j * 50}ms;${fan(j, e.cards.length, 5, 1.2)}`)).join('');
         U.spot.forEach((o, j) => { if (j !== k && o.childElementCount) o.classList.add('old'); });
         e.cards.forEach((c, j) => tl.fly(k ? U.ava[k] : U.hand, sp, cardHTML(c, '', '--w:46px'), 280, j * 50, [-12, 0]));
-        if (bomb) { this.sfx.play('slam', { gain: 1, when: .2 }); tl.after(() => Platform.fx.restart(U.app, 'shake'), 220); }
+        if (bomb) { this.sfx.play('slam', { gain: 1, when: .2 }); tl.after(() => { Platform.fx.restart(U.app, 'shake'); this._bolt(sp, 1); }, 220); }
         else this.sfx.play('place', { gain: .8, when: .22 });
-        U.type.textContent = B.TYPE_NAME[e.type]; Platform.fx.restart(U.type, 'pop');
+        U.type.textContent = B.TYPE_NAME[e.type] + (bomb ? '！' : ''); U.type.classList.toggle('bomb', bomb); Platform.fx.restart(U.type, 'pop');
         if (k) this._say(k, B.TYPE_NAME[e.type], 'type');
         if (!k || e.by === me) this._sel = new Set();
       }
@@ -549,13 +573,21 @@ if (typeof Platform !== 'undefined') {
         tl.after(() => U.spot.forEach((sp, j) => { gone[j].forEach(n => n.remove()); if (!sp.childElementCount) sp.className = 'b2-spot'; }), 360);
         U.type.textContent = ''; this.sfx.play('shove', { gain: .5 });
         U.bub.forEach(b => { b.className = 'b2-bub'; });
+        if (s.phase === 'play' && s.turn === me) tl.after(() => { this._say(0, '你有出牌權', 'type'); Platform.fx.restart(U.hand, 'hop'); Platform.audio.ding(); }, 400); // 取得出牌權
       }
       // 過
       if ((s.passSeq || 0) > (P.passSeq || 0) && s.lastPassBy != null) { const k = pos(s.lastPassBy); if (k) this._say(k, '過'); Platform.audio.knock(); } // 過牌敲桌，同德州
       // 結算
       if (s.phase === 'scored' && P.phase !== 'scored') {
         U.spot.forEach(o => o.classList.add('old'));
-        tl.after(() => this._showResult(), 1100);
+        // 贏牌特效：閃電劈向贏家、金色光環、「出完！」印章、彩帶，之後才出結算面板
+        const kw = pos(s.winner), wEl = kw ? U.seat[kw].querySelector('.b2-pod') : U.seat[0];
+        tl.after(() => {
+          this._bolt(wEl, 3, `${pl[s.winner].name} 出完！`); U.seat[kw].classList.add('win');
+          Platform.audio._noise(1.4, .9, 30); Platform.audio._tone(55, .9, 'sawtooth', .35); this.sfx.play('slam', { gain: 1 });
+          const r = wEl.getBoundingClientRect(); if (!Platform.fx.reduced()) Platform.fx.confetti(r.left + r.width / 2, r.top + r.height / 2, 40);
+        }, 350);
+        tl.after(() => this._showResult(), 2000);
       }
     }
     // 自己手牌：張數變了（出牌或連線新狀態）才重繪
