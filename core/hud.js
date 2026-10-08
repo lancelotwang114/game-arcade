@@ -50,8 +50,8 @@ Platform.hud = {
     const G = this.G; if (!G) return;
     if (this._orig) G._after = this._orig; G._paused = false;
     document.removeEventListener('keydown', this._key);
-    [this._tools, this._bMore, this._chat, this._pauseOv].forEach(el => el && el.remove());
-    this._tools = this._bMore = this._chat = this._pauseOv = null;
+    [this._tools, this._bMore, this._chat, this._pauseOv, this._volBox].forEach(el => el && el.remove());
+    this._tools = this._bMore = this._chat = this._pauseOv = this._volBox = this._volIn = null;
     if (window.speechSynthesis) speechSynthesis.cancel();
     this.G = this.o = null;
   },
@@ -78,17 +78,43 @@ Platform.hud = {
     });
     this._bSpd._names = SPD_NAME;
     this._bAuto = btn('auto', '代打', '🤖', '代打（交給電腦幫你打）', () => this.requestAuto(!this._myAuto()));
+    // 音量：點開滑桿；滑鼠滾輪在「音量」或遊戲原本的靜音鈕上也能調
+    this._bVol = btn('vol', '音量', '🔉', '音量（點開滑桿，或用滑鼠滾輪調整）', () => this._volPop());
+    const wheel = e => { e.preventDefault(); this.setVol(Platform.audio.vol + (e.deltaY < 0 ? .1 : -.1)); };
+    [this._bVol, bar.querySelector('[class*="-snd"]')].forEach(b => b && b.addEventListener('wheel', wheel, { passive: false }));
     this._bVoice = btn('voice', '語音', '', '語音報牌開關', () => { Platform.voice.setEnabled(!Platform.voice.enabled); if (Platform.voice.enabled) Platform.voice.say('語音報牌開啟'); this.sync(); });
     this._bPause = btn('pause', '暫停', '⏸', '暫停／繼續（P）', () => this.setPause(!this.G._paused));
     this._bChat = btn('chat', '聊天', '💬', '聊天（C）', () => this.toggleChat());
     btn('bug', '錯誤回報', '🐞', '複製除錯紀錄（遇到錯誤時按，再貼給房主）', () => this.copyReport());
     box.addEventListener('click', e => { if (e.target.closest('.hud-ic')) box.classList.remove('open'); }); // 窄螢幕下拉：點了就收起
-    const first = bar.querySelector('button'); if (first) first.before(box); else bar.append(box); // 排在遊戲原有圖示前面
+    const own = [...bar.querySelectorAll(':scope > button')]; // 遊戲原有圖示：一起收進工具列（桌機照常一排；手機一起進「選單」）
+    if (own[0]) own[0].before(box); else bar.append(box);
+    own.forEach(b => box.append(b));
     // 窄螢幕（手機）：共用按鈕收進「選單」下拉，避免一排擠爆
     const more = this._bMore = document.createElement('button'); more.className = 'hud-ic hud-lbl hud-b-more'; more.dataset.label = '選單'; more.textContent = '⚙';
     more.setAttribute('aria-label', '更多功能'); more.setAttribute('aria-expanded', 'false');
     more.onclick = () => { const on = box.classList.toggle('open'); more.setAttribute('aria-expanded', String(on)); };
     box.before(more);
+  },
+  setVol(v) {
+    Platform.audio.setVol(Math.round(Math.max(0, Math.min(1, v)) * 20) / 20);
+    if (this._volIn) this._volIn.value = Math.round(Platform.audio.vol * 100);
+    Platform.audio._tone(660, .06, 'sine', .35); // 試聽目前大小
+    this.sync();
+  },
+  _volPop() {
+    if (this._volBox) { this._volBox.remove(); this._volBox = this._volIn = null; return; }
+    const box = this._volBox = document.createElement('div'); box.className = 'hud-volpop';
+    box.innerHTML = '<span>🔈</span><input type="range" min="0" max="100" step="5" aria-label="音量"><span>🔊</span><b></b>';
+    const inp = this._volIn = box.querySelector('input'); inp.value = Math.round(Platform.audio.vol * 100);
+    inp.oninput = () => this.setVol(inp.value / 100);
+    box.addEventListener('wheel', e => { e.preventDefault(); this.setVol(Platform.audio.vol + (e.deltaY < 0 ? .1 : -.1)); }, { passive: false });
+    const r = this._bVol.getBoundingClientRect(), shown = r.width > 0; // 手機下拉收起後按鈕不可見：改貼右上
+    box.style.top = (shown ? r.bottom + 18 : 64) + 'px'; box.style.right = (shown ? Math.max(8, innerWidth - r.right) : 8) + 'px';
+    document.body.append(box); inp.focus();
+    const away = e => { if (!box.contains(e.target) && !this._bVol.contains(e.target)) { document.removeEventListener('pointerdown', away, true); if (this._volBox === box) this._volPop(); } };
+    document.addEventListener('pointerdown', away, true); // 點外面就收起
+    this.sync();
   },
   _myAuto() { const p = this.G.st && this.G.st.players[this._me()]; return !!(p && p.auto); },
 
@@ -99,6 +125,8 @@ Platform.hud = {
     if (st && st.players) st.players.forEach((p, i) => { const el = this.o.seatEl(i); if (el) el.classList.toggle('hud-auto', !!p.auto); });
     this._bSpd.hidden = !host; this._bSpd.textContent = this._bSpd._names[G.AI_SPEED] || '正常';
     this._bAuto.classList.toggle('on', this._myAuto());
+    const vp = Math.round(Platform.audio.vol * 100); this._bVol.dataset.label = `音量 ${vp}%`; this._bVol.textContent = vp ? (vp < 50 ? '🔉' : '🔊') : '🔈';
+    if (this._volBox) this._volBox.querySelector('b').textContent = vp + '%';
     this._bVoice.textContent = Platform.voice.enabled ? '🗣' : '🔕'; this._bVoice.classList.toggle('on', Platform.voice.enabled);
     this._bPause.hidden = !host; this._bPause.textContent = G._paused ? '▶' : '⏸'; this._bPause.classList.toggle('on', !!G._paused);
   },
