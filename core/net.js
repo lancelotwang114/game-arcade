@@ -47,6 +47,7 @@ Platform.net = {
     c.on('open', () => {
       if (!this.conns.includes(c)) this.conns.push(c);
       const g = c.metadata && c.metadata.game, act = Platform._active;
+      if (this.isHost && Platform.toast) Platform.toast(`${name() || '玩家'} 進房了`);
       // 賓客拿的是舊連結（房主已換遊戲 / 正在大廳選遊戲）→ 導到房主目前的狀態，而不是用錯的遊戲入座
       if (this.isHost && !act) try { c.send({ type: 'hold' }); } catch {}
       else if (this.isHost && g && g !== act.id) try { c.send({ type: 'switch', game: act.id }); } catch {}

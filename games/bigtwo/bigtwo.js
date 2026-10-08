@@ -1,20 +1,20 @@
 /* 大老二 Big Two — 單機 + AI（4 人，每人 13 張）
    規則（台灣常見版 + 炸彈）：
    - 點數 3 < 4 < … < K < A < 2；花色 梅花 < 方塊 < 紅心 < 黑桃。
-   - 牌型：單張、對子、五張（順子、同花、葫蘆、鐵支、同花順）；不能單出三條。
-   - 只有相同牌型才能互壓（葫蘆不能壓順子、同花不能壓順子）。
+   - 牌型：單張、對子、五張（順子、葫蘆、鐵支、同花順）；不能單出三條；台灣規則沒有同花。
+   - 只有相同牌型才能互壓（葫蘆不能壓順子）。
    - 炸彈：鐵支（四條帶一張）、同花順可以壓任何牌型（含單張、對子）；同花順 > 鐵支。
    - 順子：23456 最大、A2345 第二，其餘依最大一張；JQKA2、QKA23、KA234 不算順子。同順子比最大那張的花色。
-   - 開局：持梅花 3 者先出，第一手必須包含梅花 3；之後每局由上局贏家先出（不限牌）。
-   - 一輪中其他人都「過」，最後出牌者取得出牌權，可出任何牌型。
+   - 開局：每局都由持梅花 3 者先出，第一手必須包含梅花 3。
+   - 一輪中「過」了就不能再出，直到其他人都過、最後出牌者取得出牌權（可出任何牌型），才開始新的一輪。
    - 結算：輸家扣剩餘張數；剩 10 張以上 ×2、13 張全沒出 ×3；手上有 2 再 ×2。累計先到目標分數者輸，遊戲結束。 */
 const BigTwo = {
   RANKS: ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'],
   SUITS: ['c', 'd', 'h', 's'],                // 梅花 < 方塊 < 紅心 < 黑桃
   rv(r) { return this.RANKS.indexOf(r) + 3; }, // 3..15（2 = 15）
   cv(c) { return this.rv(c.r) * 4 + this.SUITS.indexOf(c.s); }, // 單張比較值
-  TYPE_NAME: { single: '單張', pair: '對子', straight: '順子', flush: '同花', fullhouse: '葫蘆', four: '鐵支', sflush: '同花順' },
-  FIVE_ORDER: ['straight', 'flush', 'fullhouse', 'four', 'sflush'],
+  TYPE_NAME: { single: '單張', pair: '對子', straight: '順子', fullhouse: '葫蘆', four: '鐵支', sflush: '同花順' },
+  FIVE_ORDER: ['straight', 'fullhouse', 'four', 'sflush'],
   TARGET: 60,
 
   // ---------- 牌型判定（純函式）----------
@@ -43,7 +43,6 @@ const BigTwo = {
     if (sk && flush) return { type: 'sflush', key: [sk, this.cv(hi)] };
     if (groups[0][1] === 4) return { type: 'four', key: [this.rv(groups[0][0])] };
     if (groups[0][1] === 3 && groups[1][1] === 2) return { type: 'fullhouse', key: [this.rv(groups[0][0])] };
-    if (flush) return { type: 'flush', key: cs.map(c => this.cv(c)).reverse() };
     if (sk) return { type: 'straight', key: [sk, this.cv(hi)] };
     return null;
   },
@@ -107,11 +106,11 @@ const BigTwo = {
     const s = this.st; s.handNo++;
     const deck = this.shuffle(this.makeDeck());
     s.players.forEach((p, i) => { p.hand = this.sortHand(deck.slice(i * 13, i * 13 + 13)); p.last = ''; });
-    s.table = null; s.trick = []; s.passes = 0; s.winner = -1; s.phase = 'play'; this._dealtAt = Date.now();
-    s.first = s.lastWinner < 0;                                   // 第一局：梅花 3 開
-    s.turn = s.first ? s.players.findIndex(p => p.hand.some(c => c.r === '3' && c.s === 'c')) : s.lastWinner;
+    s.table = null; s.trick = []; s.passes = 0; s.passed = [false, false, false, false]; s.winner = -1; s.phase = 'play'; this._dealtAt = Date.now();
+    s.first = true;                                               // 台灣規則：每局都由梅花 3 開
+    s.turn = s.players.findIndex(p => p.hand.some(c => c.r === '3' && c.s === 'c'));
     s.leader = s.turn;
-    this.log(`— 第 ${s.handNo} 局 — ${s.players[s.turn].name} 先出${s.first ? '（梅花 3）' : ''}`);
+    this.log(`— 第 ${s.handNo} 局 — ${s.players[s.turn].name} 先出（梅花 3）`);
     if (this.render) this.render();
     this.tick();
   },
@@ -128,7 +127,7 @@ const BigTwo = {
     p.hand = p.hand.filter(c => !cards.includes(c));
     s.table = { by: i, cards: this.sortHand([...cards]), t };
     s.trick = (s.trick || []).concat([{ by: i, cards: s.table.cards, type: t.type }]); // 這一輪各家出過的牌（UI 顯示用）
-    s.first = false; s.passes = 0; s.leader = i; p.last = this.TYPE_NAME[t.type];
+    s.first = false; s.leader = i; p.last = this.TYPE_NAME[t.type];
     this.log(`${p.name} 出 ${this.TYPE_NAME[t.type]}：${cards.map(c => this.cardName(c)).join(' ')}`);
     if (!p.hand.length) { this._endHand(i); return true; }
     this._next();
@@ -137,17 +136,18 @@ const BigTwo = {
   pass(i) {
     const s = this.st;
     if (s.phase !== 'play' || s.turn !== i || !this.canPass()) return false;
-    s.players[i].last = '過'; s.passes++; s.passSeq = (s.passSeq || 0) + 1; s.lastPassBy = i; // UI 依序號顯示「過」
+    s.players[i].last = '過'; s.passes++; s.passed[i] = true; // 過了這輪就不能再出，直到有人取得出牌權 s.passSeq = (s.passSeq || 0) + 1; s.lastPassBy = i; // UI 依序號顯示「過」
     this.log(`${s.players[i].name} 過`);
     if (s.passes >= 3) {                                          // 其他三家都過：最後出牌者取得出牌權
-      s.table = null; s.trick = []; s.passes = 0; s.turn = s.leader;
+      s.table = null; s.trick = []; s.passes = 0; s.passed = [false, false, false, false]; s.turn = s.leader;
       s.players.forEach(p => { p.last = ''; });
       this.log(`${s.players[s.turn].name} 取得出牌權`);
       if (this.render) this.render(); this.tick(); return true;
     }
     this._next(); return true;
   },
-  _next() { const s = this.st; s.turn = (s.turn + 1) % 4; if (this.render) this.render(); this.tick(); },
+  _next() { const s = this.st; do s.turn = (s.turn + 1) % 4; while (s.passed[s.turn]); // 跳過本輪已過的人（最後出牌者不會是過的人）
+    if (this.render) this.render(); this.tick(); },
   _endHand(w) {
     const s = this.st; s.phase = 'scored'; s.winner = w; s.lastWinner = w;
     const res = s.players.map((p, i) => i === w ? 0 : this.penalty(p.hand));
@@ -203,7 +203,7 @@ if (typeof module !== 'undefined' && require.main === module) {
   // 牌型
   assert.strictEqual(T('3c').type, 'single'); assert.strictEqual(T('3c 3s').type, 'pair'); assert.strictEqual(T('3c 4s'), null, '非對子');
   assert.strictEqual(T('3c 3d 3h'), null, '不能單出三條');
-  assert.strictEqual(T('3c 4d 5h 6s 7c').type, 'straight'); assert.strictEqual(T('3c 5c 7c 9c Jc').type, 'flush');
+  assert.strictEqual(T('3c 4d 5h 6s 7c').type, 'straight'); assert.strictEqual(T('3c 5c 7c 9c Jc'), null, '台灣規則沒有同花');
   assert.strictEqual(T('3c 3d 3h 9s 9c').type, 'fullhouse'); assert.strictEqual(T('3c 3d 3h 3s 9c').type, 'four');
   assert.strictEqual(T('3c 4c 5c 6c 7c').type, 'sflush');
   assert.strictEqual(T('Jc Qd Kh As 2c'), null, 'JQKA2 不算順子'); assert.strictEqual(T('Kc Ad 2h 3s 4c'), null, 'KA234 不算順子');
@@ -212,9 +212,7 @@ if (typeof module !== 'undefined' && require.main === module) {
   assert.ok(beats('2c 3d 4h 5s 6c', 'Ac 2d 3h 4s 5c'), '23456 > A2345');
   assert.ok(beats('Ac 2d 3h 4s 5c', '10c Jd Qh Ks Ac'), 'A2345 > 10JQKA');
   assert.ok(beats('4c 5d 6h 7s 8c', '3c 4d 5h 6s 7s'), '45678 > 34567');
-  assert.ok(!beats('3c 5c 7c 9c Jc', 'Ac 2d 3h 4s 5c'), '同花不能壓順子');
   assert.ok(!beats('3c 3d 3h 9s 9c', '3c 4d 5h 6s 7c'), '葫蘆不能壓順子');
-  assert.ok(!beats('3c 3d 3h 9s 9c', '3c 5c 7c 9c Jc'), '葫蘆不能壓同花');
   assert.ok(beats('3c 3d 3h 3s 4c', 'Ac Ad Ah Ks Kc'), '鐵支 > 葫蘆');
   assert.ok(beats('3c 4c 5c 6c 7c', '2c 2d 2h 2s 3d'), '同花順 > 鐵支');
   assert.ok(!beats('2c 2d 2h 2s 3d', '3c 4c 5c 6c 7c'), '鐵支不能壓同花順');
@@ -222,6 +220,18 @@ if (typeof module !== 'undefined' && require.main === module) {
   assert.ok(beats('3c 3d 3h 3s 4c', '2s'), '鐵支壓單張 2'); assert.ok(beats('3c 4c 5c 6c 7c', '2s 2h'), '同花順壓對 2');
   assert.ok(!beats('3c 4d 5h 6s 7c', '3d'), '普通順子不能壓單張');
   assert.ok(!beats('4c 4d', '5c'), '對子不能壓單張');
+  // 每局都由梅花 3 先出；過了這輪不能再出
+  { const tk = B.tick; B.render = null; B.tick = () => {};
+    const has3c = () => B.st.players[B.st.turn].hand.some(c => c.r === '3' && c.s === 'c');
+    B.newMatch('P0'); assert.ok(has3c(), '第一局梅花 3 先出');
+    B.st.lastWinner = 2; B.newHand(); assert.ok(has3c() && B.st.first, '之後每局也由梅花 3 先出');
+    const s = B.st, H = ['3c 2s Ac', '5d 6d', '7h 8h', '9s 10s'].map(C);
+    s.players.forEach((p, i) => { p.hand = H[i]; }); Object.assign(s, { first: false, turn: 0, leader: 0, table: null, passes: 0, passed: [false, false, false, false] });
+    B.play(0, [H[0][0]]); B.pass(1); B.play(2, [H[2][0]]); B.play(3, [H[3][0]]); B.play(0, [H[0][1]]);
+    assert.strictEqual(s.turn, 2, '過過的人這輪被跳過');
+    B.pass(2); B.pass(3); assert.ok(s.turn === 0 && !s.table, '其他人都過，最後出牌者取得出牌權');
+    assert.ok(!s.passed.some(Boolean), '新一輪過牌狀態清空');
+    B.tick = tk; }
   // 結算
   assert.strictEqual(B.penalty(C('3c 4d 5h')), 3); assert.strictEqual(B.penalty(C('3c 4d 2h')), 6, '有 2 ×2');
   assert.strictEqual(B.penalty(C('3c 4c 5c 6c 7c 8c 9c 10c Jc Qc')), 20, '10 張 ×2');
@@ -240,7 +250,7 @@ if (typeof module !== 'undefined') module.exports = BigTwo;
 if (typeof Platform !== 'undefined') {
   const B = BigTwo;
   const SR_ = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], SS_ = ['s', 'h', 'd', 'c'];
-  const TYPES = ['single', 'pair', 'straight', 'flush', 'fullhouse', 'four', 'sflush'];
+  const TYPES = ['single', 'pair', 'straight', 'fullhouse', 'four', 'sflush'];
   const key = c => c.r + c.s;
   const known = c => !!(c && c.r);
   const cardHTML = (c, cls = '', st = '') => known(c)
@@ -359,7 +369,7 @@ if (typeof Platform !== 'undefined') {
           <div class="b2-chips" role="group" aria-label="牌型快捷">${TYPES.map(t => `<button class="b2-chip" data-t="${t}" disabled>${B.TYPE_NAME[t]}<b></b></button>`).join('')}</div>
           <div class="b2-hand"></div>
         </div>
-        <div class="b2-acts"><button class="b2-act b2-sort" aria-label="排序方式">點數排序</button><button class="b2-act b2-pass" disabled>過</button><button class="b2-act primary b2-play" disabled>出牌</button></div>
+        <div class="b2-acts"><button class="b2-act b2-pass" disabled>過</button><button class="b2-act primary b2-play" disabled>出牌</button></div>
       </section>
       <div class="b2-result" aria-live="polite"><div class="b2-rbox"></div></div>
       <aside class="b2-log" aria-label="牌局紀錄"><h2>牌局紀錄 <button class="b2-ibtn b2-logx" aria-label="關閉">✕</button></h2><ul></ul></aside>
@@ -368,36 +378,37 @@ if (typeof Platform !== 'undefined') {
     const U = this._ui = {
       app: q('.b2-app'), hno: q('.b2-hno'), status: q('.b2-status'), type: q('.b2-type'), deck: q('.b2-deck'),
       seat: [q('.b2-me'), ...[1, 2, 3].map(p => q(`.b2-seat[data-p="${p}"]`))], spot: [0, 1, 2, 3].map(p => q(`.b2-spot[data-p="${p}"]`)),
-      hand: q('.b2-hand'), tip: q('.b2-tip'), chips: [...root.querySelectorAll('.b2-chip')], play: q('.b2-play'), pass: q('.b2-pass'), sort: q('.b2-sort'),
+      hand: q('.b2-hand'), tip: q('.b2-tip'), chips: [...root.querySelectorAll('.b2-chip')], play: q('.b2-play'), pass: q('.b2-pass'),
       result: q('.b2-result'), rbox: q('.b2-rbox'), snd: q('.b2-snd'), log: q('.b2-log'), logList: q('.b2-log ul'),
     };
     U.ava = U.seat.map(e => e.querySelector('.b2-ava')); U.bub = U.seat.map(e => e.querySelector('.b2-bub'));
-    this._prev = null; this._sel = new Set(); this._sortBy = 'rank'; this._cyc = {};
+    this._prev = null; this._sel = new Set(); this._cyc = {};
     const sndIcon = () => { U.snd.textContent = Platform.audio.enabled ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(Platform.audio.enabled)); };
     sndIcon(); U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); };
     q('.b2-logbtn').onclick = () => U.log.classList.add('open'); q('.b2-logx').onclick = () => U.log.classList.remove('open');
     q('.b2-style').onclick = () => Platform.ui.modal({ title: '選擇牌面風格', html: '即時切換（會記住）',
       buttons: Object.keys(Platform.cards.STYLE_NAMES).map(k => ({ label: Platform.cards.STYLE_NAMES[k] + (Platform.cards.style === k ? ' ✓' : ''), primary: Platform.cards.style === k,
         onClick: c => { c(); Platform.cards.setStyle(k); this._skin(); } })) });
-    U.sort.onclick = () => { this._sortBy = this._sortBy === 'rank' ? 'suit' : 'rank'; U.sort.textContent = this._sortBy === 'rank' ? '點數排序' : '花色排序'; this._paintHand(false); };
     this._skin();
   };
 
   // ---------- 手牌（自己）----------
   B._myHand = function () {
     const h = [...this.st.players[this._me].hand].filter(known);
-    return this._sortBy === 'rank' ? B.sortHand(h) : h.sort((a, b) => SS_.indexOf(a.s) - SS_.indexOf(b.s) || B.cv(a) - B.cv(b));
+    return B.sortHand(h);
   };
   B._paintHand = function (deal, dealDelay = []) {
     const U = this._ui, h = this._myHand(), rows = portrait() && h.length > 7 ? [h.slice(0, 7), h.slice(7)] : [h];
     let idx = 0;
     U.hand.innerHTML = rows.map(row => `<div class="b2-row">${row.map((c, k) => {
       const d = deal ? `--d:${dealDelay[idx] || 0}ms;` : ''; idx++;
-      return cardHTML(c, (this._sel.has(key(c)) ? 'sel ' : '') + (deal ? 'deal' : ''), d + (rows.length === 1 ? fan(k, row.length, 4.5, 0) : ''));
+      return cardHTML(c, (this._sel.has(key(c)) ? 'sel ' : '') + (deal ? 'deal' : ''), d + fan(k, row.length, rows.length === 1 ? 6 : 2.5, 0)); // 直式兩排也各自成扇形
     }).join('')}</div>`).join('');
     U.hand.querySelectorAll('.b2-card').forEach(el => {
       el.setAttribute('role', 'button'); el.tabIndex = 0;
-      const toggle = () => { const k = el.dataset.k; this._sel.has(k) ? this._sel.delete(k) : this._sel.add(k); this._cyc = {}; this.sfx.play('slide', { gain: .22, rate: 1.4 }); this._paintSel(); };
+      const toggle = () => { const k = el.dataset.k;
+        if (this._sel.has(k) && !U.play.disabled) { U.play.click(); return; } // 像麻將：再點一次已選的牌就出牌（不合法時才是取消選取）
+        this._sel.has(k) ? this._sel.delete(k) : this._sel.add(k); this._cyc = {}; this.sfx.play('slide', { gain: .22, rate: 1.4 }); this._paintSel(); };
       el.onclick = toggle; el.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } };
     });
     this._paintSel();
@@ -415,13 +426,13 @@ if (typeof Platform !== 'undefined') {
     U.pass.disabled = !(myTurn && s.table);
     U.tip.className = 'b2-tip' + (cards.length && !ok ? ' bad' : '');
     U.tip.textContent = !cards.length ? (myTurn ? (s.table ? `要壓過 ${s.players[s.table.by].name} 的${B.TYPE_NAME[s.table.t.type]}` : must ? '第一手要含梅花 3' : '你有出牌權，出什麼都可以') : '')
-      : !t ? '這幾張不是合法牌型' : !myTurn ? `已選：${B.TYPE_NAME[t.type]}` : ok ? '' : must && !cards.includes(must) ? '第一手要含梅花 3' : `${B.TYPE_NAME[t.type]}壓不過桌上的牌`;
-    // 牌型快捷：輪到自己時列「壓得過的」，否則列手上有的
-    const pool = myTurn ? B.legalPlays(hand, s.table, must) : B.combos(hand);
+      : !t ? '這幾張不是合法牌型' : !myTurn ? `已選：${B.TYPE_NAME[t.type]}` : ok ? '再點一下選中的牌就出牌' : must && !cards.includes(must) ? '第一手要含梅花 3' : `${B.TYPE_NAME[t.type]}壓不過桌上的牌`;
+    // 牌型快捷：輪到自己時列「壓得過的」
+    const pool = myTurn ? B.legalPlays(hand, s.table, must) : [];
     const by = {}; pool.forEach(cs => { const tp = B.classify(cs).type; (by[tp] = by[tp] || []).push(cs); });
     this._chipPool = by;
     U.chips.forEach(ch => { const n = (by[ch.dataset.t] || []).length; ch.querySelector('b').textContent = n ? n : '';
-      ch.disabled = !n || !myTurn; ch.classList.toggle('on', !!(t && t.type === ch.dataset.t)); });
+      ch.disabled = ch.hidden = !n || !myTurn; ch.classList.toggle('on', !!(t && t.type === ch.dataset.t)); }); // 只列輪到自己時壓得過的牌型
   };
   // 點牌型快捷：由小到大循環選一組
   B._pickType = function (tp) {

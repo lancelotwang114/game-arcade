@@ -88,11 +88,14 @@
 .b2-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .b2-tip { min-height: 20px; font-size: 14px; color: var(--muted); text-align: center; }
 .b2-tip.bad { color: var(--bad); font-weight: 700; }
-.b2-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
-.b2-chip { min-height: 44px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel); font: 700 14px 'Noto Sans TC', sans-serif; display: inline-flex; align-items: center; gap: 4px; transition: background .15s, border-color .15s; }
-.b2-chip b { font: 600 12px var(--o); color: var(--accent); min-width: 1em; }
-.b2-chip.on { background: rgba(231,196,110,.22); border-color: var(--accent); }
-.b2-chip:disabled { opacity: .3; cursor: default; }
+/* 牌型快捷：只在輪到自己時列出壓得過的牌型；點一下由小到大循環選牌 */
+.b2-chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; min-height: 44px; }
+.b2-chips .b2-chip { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--accent); background: rgba(231,196,110,.08); color: var(--accent); font: 700 15px 'Noto Sans TC', sans-serif; display: inline-flex; align-items: center; gap: 6px; transition: background .15s, color .15s, transform .1s; }
+.b2-chip[hidden] { display: none; }
+.b2-chip b { font: 600 11px var(--o); padding: 1px 6px; border-radius: 99px; background: rgba(231,196,110,.2); }
+.b2-chip.on { background: var(--accent); color: var(--accent-ink); }
+.b2-chip.on b { background: rgba(0,0,0,.18); }
+.b2-chip:active { transform: scale(.95); }
 .b2-hand { display: flex; flex-direction: column; align-items: center; padding: 18px 0 16px; }
 .b2-row { display: flex; justify-content: center; align-items: flex-end; }
 .b2-hand .b2-card { --w: clamp(56px, 6vw, 88px); margin-left: calc(var(--w) * -.48); cursor: pointer; transform-origin: 50% 400%; }
@@ -101,7 +104,6 @@
 .b2-acts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; min-width: 150px; }
 .b2-act { min-height: 50px; border-radius: 14px; border: 1px solid var(--line); background: rgba(10,20,14,.88); font: 700 16px 'Noto Sans TC', sans-serif; transition: transform .1s, opacity .2s; }
 .b2-act.primary { background: var(--primary); color: var(--accent-ink); border: 0; font-size: 18px; min-height: 58px; }
-.b2-act.b2-sort { min-height: 44px; font-size: 13px; color: var(--muted); }
 .b2-act:disabled { opacity: .3; cursor: default; }
 .b2-act:not(:disabled):active { transform: scale(.95); }
 .b2-app.myturn .b2-act.primary:not(:disabled) { box-shadow: 0 6px 22px var(--glow); }
@@ -142,13 +144,12 @@
   .b2-dock { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "mid mid" "me acts"; gap: 6px 8px; padding: 0 8px calc(8px + env(safe-area-inset-bottom)); align-items: center; }
   .b2-me { grid-area: me; margin: 0; padding: 4px 10px 4px 4px; } .b2-me .b2-ava { width: 38px; }
   .b2-acts { grid-area: acts; flex-direction: row; min-width: 0; margin: 0; gap: 6px; } .b2-act { flex: 1; min-width: 0; min-height: 48px; font-size: 15px; } .b2-act.primary { min-height: 48px; flex: 1.5; font-size: 16px; }
-  .b2-act.b2-sort { flex: .9; font-size: 12px; }
   .b2-mid { grid-area: mid; }
-  .b2-chips { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; width: 100%; padding-bottom: 2px; scrollbar-width: none; }
-  .b2-chip { flex-shrink: 0; padding: 0 10px; font-size: 13px; }
+  .b2-chips { flex-wrap: nowrap; overflow-x: auto; justify-content: safe center; width: 100%; padding-bottom: 2px; scrollbar-width: none; }
+  .b2-chips .b2-chip { flex-shrink: 0; padding: 0 12px; font-size: 14px; }
   .b2-hand { padding-top: 16px; gap: 6px; width: 100%; }
-  .b2-hand .b2-card { --w: max(44px, calc((100vw - 28px) / 7 - 3px)); margin: 0 1.5px; }
-  .b2-hand .b2-card:first-child { margin-left: 1.5px; }
+  .b2-hand .b2-card { --w: max(44px, calc((100vw - 28px) / 6.2)); margin-left: calc(var(--w) * -.3); transform-origin: 50% 260%; } /* 兩排各自小扇形：略疊、轉軸較近，不超出畫面 */
+  .b2-hand .b2-card:first-child { margin-left: 0; }
   .b2-hand .b2-card.sel { transform: translateY(-14px); }
 }
 /* 矮手機直拿（如 375×667）：精簡對手面板 */
@@ -158,7 +159,7 @@
   .b2-score { display: none; } .b2-pod .b2-ava { width: 34px; font-size: 13px; } .b2-pod { padding: 4px 6px; }
   .b2-seat[data-p="1"], .b2-seat[data-p="3"] { top: 34%; }
   .b2-center .b2-status { display: none; }
-  .b2-hand .b2-card { --w: max(44px, calc((100vw - 28px) / 7 - 5px)); }
+  .b2-hand .b2-card { --w: max(44px, calc((100vw - 28px) / 7)); }
 }
 /* 橫向且不高：牌桌改扁寬，左右對手分得開 */
 @media (orientation: landscape) and (max-height: 640px) {
@@ -174,7 +175,7 @@
   .b2-fanback { display: none; }
   .b2-hand .b2-card { --w: 50px; } .b2-hand { padding-top: 14px; }
   .b2-act { min-height: 44px; } .b2-act.primary { min-height: 48px; } .b2-acts { gap: 6px; }
-  .b2-chip { min-height: 44px; padding: 0 8px; font-size: 12px; } .b2-tip { display: none; }
+  .b2-chips .b2-chip { min-height: 44px; padding: 0 10px; font-size: 13px; } .b2-tip { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .b2-root *, .b2-root *::before, .b2-root *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
