@@ -1512,6 +1512,7 @@ body.in-lobby .hud { visibility:hidden; }
     <div class="ic ic-wide" data-label="電腦速度" title="電腦速度：正常" id="hud-speed-btn" onclick="Game.cycleSpeed?.()">正常</div>
     <div class="ic" data-label="代打" title="自動代打" id="hud-autoplay-btn" onclick="Game.toggleAutoPlay?.()">🤖</div>
     <div class="ic" data-label="音效" title="音效開關" id="hud-audio-btn" onclick="Game.toggleAudioMute?.()">🔊</div>
+    <div class="ic" data-label="錯誤回報" title="複製除錯紀錄（遇到錯誤時按，再貼給房主）" onclick="DbgLog.copy()">🐞</div>
     <div class="ic" data-label="返回大廳" title="返回大廳" onclick="Game.returnLobby?.()">🏠</div>
     <div class="ic" data-label="存檔離開" title="離開（自動存檔）" onclick="Game.leaveAndSave?.()" style="display:none">出</div>
   </div>
@@ -11336,7 +11337,8 @@ window.Online = {
           Game._hostStateSeen=true; // 開局儀式：收到房主真實手牌後才翻牌
           // 【v1.6.58】若正在顯示鳴牌 offer（吃/碰/槓），跳過 clearBtns；
           // 正確清除時機是 action_resolved，此處強清會導致 offer 瞬間消失
-          if(!(Game._candidateMap&&Game._candidateMap.size>0)) Game.clearBtns();
+          // 只有「胡」的 offer 不進 _candidateMap，另以胡卡判斷，否則賓客胡別家棄牌的按鈕會被清掉
+          if(!(Game._candidateMap&&Game._candidateMap.size>0)&&!document.querySelector('#ap .mcard.aw')) Game.clearBtns();
           Game.st=data.state;
           Game.render();
           // Set up interactive turn UI when it's our turn (tile already in hand)
@@ -11865,6 +11867,7 @@ window.MahjongNetwork = {
 
 // 暴露全域到 window（讓 HTML onclick 屬性可呼叫）
 window.Game = Game;
+window.DbgLog = DbgLog;
 window.Snd = Snd;
 window.Bgm = Bgm;
 window.Lobby = Lobby;
