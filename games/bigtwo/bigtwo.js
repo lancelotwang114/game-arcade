@@ -4,7 +4,7 @@
    - 牌型：單張、對子、五張（順子、葫蘆、鐵支、同花順）；不能單出三條；台灣規則沒有同花。
    - 只有相同牌型才能互壓（葫蘆不能壓順子）。
    - 炸彈：鐵支（四條帶一張）、同花順可以壓任何牌型（含單張、對子）；同花順 > 鐵支。
-   - 順子：23456 最大、A2345 第二，其餘依最大一張；JQKA2、QKA23、KA234 不算順子。同順子比最大那張的花色。
+   - 順子：23456 最大、10JQKA 第二，其餘依最大一張，A2345 最小；JQKA2、QKA23、KA234 不算順子。同順子比最大那張的花色。
    - 開局：每局都由持梅花 3 者先出，第一手必須包含梅花 3。
    - 一輪中「過」了就不能再出，直到其他人都過、最後出牌者取得出牌權（可出任何牌型），才開始新的一輪。
    - 結算：輸家依剩餘張數計點（剩 10 張以上 ×2、13 張全沒出 ×3；手上有 2 再 ×2），點數 × 每點金額付給贏家；有人籌碼輸光即結束。 */
@@ -18,13 +18,13 @@ const BigTwo = {
   START: 1000, UNIT: 10, TURN_SEC: 30, AI_SPEED: 1, // 起始籌碼、每點金額、行動限時、電腦速度（房間設定）
 
   // ---------- 牌型判定（純函式）----------
-  // 順子：回傳比較鍵（越大越強），不是順子回傳 0。23456 = 17、A2345 = 16、其餘 = 最大點數（7..14）
+  // 順子：回傳比較鍵（越大越強），不是順子回傳 0。23456 = 17、其餘 = 最大點數（7..14）、A2345 = 6（最小）
   _straightKey(cards) {
     const v = cards.map(c => this.rv(c.r)).sort((a, b) => a - b);
     if (new Set(v).size !== 5) return 0;
     const is = arr => arr.every((x, i) => i === 0 || x === arr[i - 1] + 1);
     if (v.join() === '3,4,5,6,15') return 17;           // 2 3 4 5 6
-    if (v.join() === '3,4,5,14,15') return 16;          // A 2 3 4 5
+    if (v.join() === '3,4,5,14,15') return 6;           // A 2 3 4 5：最小（低於 34567 的 7）
     if (v[4] === 15) return 0;                          // 其他含 2 的（JQKA2 等）不算順子
     return is(v) ? v[4] : 0;
   },
@@ -218,7 +218,9 @@ if (typeof module !== 'undefined' && require.main === module) {
   // 大小
   assert.ok(beats('2c', 'As'), '2 > A'); assert.ok(beats('3s', '3h'), '同點比花色：黑桃 > 紅心');
   assert.ok(beats('2c 3d 4h 5s 6c', 'Ac 2d 3h 4s 5c'), '23456 > A2345');
-  assert.ok(beats('Ac 2d 3h 4s 5c', '10c Jd Qh Ks Ac'), 'A2345 > 10JQKA');
+  assert.ok(beats('10c Jd Qh Ks Ac', 'Ac 2d 3h 4s 5c'), '10JQKA > A2345');
+  assert.ok(beats('3c 4d 5h 6s 7c', 'Ac 2d 3h 4s 5s'), '34567 > A2345（A2345 最小，即使含黑桃 2）');
+  assert.ok(beats('3c 4c 5c 6c 7c', 'As 2s 3s 4s 5s'), '同花順 A2345 也是最小');
   assert.ok(beats('4c 5d 6h 7s 8c', '3c 4d 5h 6s 7s'), '45678 > 34567');
   assert.ok(!beats('3c 3d 3h 9s 9c', '3c 4d 5h 6s 7c'), '葫蘆不能壓順子');
   assert.ok(beats('3c 3d 3h 3s 4c', 'Ac Ad Ah Ks Kc'), '鐵支 > 葫蘆');
