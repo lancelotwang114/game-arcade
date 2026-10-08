@@ -104,7 +104,7 @@ GitHub Pages 同時保留為備援（Settings → Pages → Deploy from a branch
 
 ## 素材與授權
 
-- 德州撲克的籌碼與撲克牌音效：[Kenney — Casino Audio](https://kenney.nl/assets/casino-audio)，CC0 授權（授權檔見 `games/texas/audio/LICENSE-kenney.txt`）。
+- 德州撲克的籌碼與撲克牌音效：[Kenney — Casino Audio](https://kenney.nl/assets/casino-audio)，CC0 授權（授權檔見 `core/sfx/LICENSE-kenney.txt`，各遊戲共用）。
 - 騙子酒吧的音效：[BigSoundBank](https://bigsoundbank.com)（酒吧環境音、擊錘、碰杯）、[The Free Firearm Sound Library](https://opengameart.org/content/the-free-firearm-sound-library)（左輪槍聲）、[Kenney](https://kenney.nl)（拍桌、玻璃、撲克牌），皆為 CC0 授權，逐檔來源見 `games/liarsbar/audio/CREDITS.txt`。
 - 麻將牌、撲克牌面、牌背等圖像素材為自製或衍生作品。
 - 程式碼為個人作品。

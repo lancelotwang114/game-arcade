@@ -75,9 +75,11 @@ const BigTwo = {
     return out;
   },
   // 能壓過 table 的所有組合，由小到大（同類型內）；mustHave = 必須包含的牌（開局梅花 3）
-  legalPlays(hand, table, mustHave) {
+  legalPlays(hand, table, mustHave, topSingle) { // topSingle = 下家報牌，單張只能出最大
+    const top = topSingle ? this.topCv(hand) : 0;
     return this.combos(hand).filter(cs => {
       if (mustHave && !cs.includes(mustHave)) return false;
+      if (topSingle && cs.length === 1 && this.cv(cs[0]) !== top) return false;
       return this.beats(this.classify(cs), table && table.t);
     });
   },
@@ -116,6 +118,8 @@ const BigTwo = {
   },
   club3() { return this.st.first ? this.st.players[this.st.turn].hand.find(c => c.r === '3' && c.s === 'c') : null; },
   canPass() { return !!this.st.table; },  // 自己有出牌權時不能過
+  baoPai(i) { return this.st.players[(i + 1) % 4].hand.length === 1; }, // 報牌：下家剩 1 張時，出單張必須出手上最大的
+  topCv(hand) { return Math.max(...hand.map(c => this.cv(c))); },
   // 出牌：cards 為該玩家手牌中的物件
   play(i, cards) {
     const s = this.st, p = s.players[i];
@@ -123,6 +127,7 @@ const BigTwo = {
     const t = this.classify(cards);
     if (!t || !cards.every(c => p.hand.includes(c))) return false;
     const must = this.club3(); if (must && !cards.includes(must)) return false;
+    if (t.type === 'single' && this.baoPai(i) && this.cv(cards[0]) !== this.topCv(p.hand)) return false;
     if (!this.beats(t, s.table && s.table.t)) return false;
     p.hand = p.hand.filter(c => !cards.includes(c));
     s.table = { by: i, cards: this.sortHand([...cards]), t };
@@ -168,7 +173,7 @@ const BigTwo = {
   aiAct(i) {
     const s = this.st; if (!s || s.phase !== 'play' || s.turn !== i) return;
     const p = s.players[i], must = this.club3();
-    const plays = this.legalPlays(p.hand, s.table, must);
+    const plays = this.legalPlays(p.hand, s.table, must, this.baoPai(i));
     if (!plays.length) { this.pass(i); return; }
     const minOpp = Math.min(...s.players.filter((q, k) => k !== i).map(q => q.hand.length));
     const score = cs => { const t = this.classify(cs); const base = t.type === 'single' || t.type === 'pair' ? 0 : 100 + this.FIVE_ORDER.indexOf(t.type) * 20;
@@ -231,6 +236,11 @@ if (typeof module !== 'undefined' && require.main === module) {
     assert.strictEqual(s.turn, 2, '過過的人這輪被跳過');
     B.pass(2); B.pass(3); assert.ok(s.turn === 0 && !s.table, '其他人都過，最後出牌者取得出牌權');
     assert.ok(!s.passed.some(Boolean), '新一輪過牌狀態清空');
+    // 報牌：下家剩 1 張，出單張只能出最大
+    const R = ['4c 9d Ks', '5d', '7h 8h', '9s 10s'].map(C); s.players.forEach((p, i) => { p.hand = R[i]; });
+    Object.assign(s, { turn: 0, leader: 0, table: null, passes: 0, passed: [false, false, false, false] });
+    assert.ok(B.legalPlays(R[0], null, null, B.baoPai(0)).every(cs => cs.length > 1 || cs[0] === R[0][2]), '報牌時只列最大單張');
+    assert.ok(!B.play(0, [R[0][0]]), '報牌時不能出小單張'); assert.ok(B.play(0, [R[0][2]]), '報牌時可出最大單張');
     B.tick = tk; }
   // 結算
   assert.strictEqual(B.penalty(C('3c 4d 5h')), 3); assert.strictEqual(B.penalty(C('3c 4d 2h')), 6, '有 2 ×2');
@@ -275,7 +285,7 @@ if (typeof Platform !== 'undefined') {
       players: s.players.map((p, i) => ({ id: p.id, name: p.name, isAI: p.isAI, score: p.score, last: p.last,
         hand: (i === seat || open) ? p.hand : p.hand.map(() => ({ hidden: true })) })),
       handNo: s.handNo, turn: s.turn, table: s.table, trick: s.trick || [], passes: s.passes, leader: s.leader, first: s.first,
-      phase: s.phase, log: s.log, winner: s.winner, lastWinner: s.lastWinner, lastResult: s.lastResult || null, passSeq: s.passSeq || 0, lastPassBy: s.lastPassBy,
+      phase: s.phase, log: s.log, winner: s.winner, lastWinner: s.lastWinner, lastResult: s.lastResult || null, passSeq: s.passSeq || 0, lastPassBy: s.lastPassBy, passed: s.passed,
     }));
   };
   B._push = function () {
@@ -382,7 +392,7 @@ if (typeof Platform !== 'undefined') {
       result: q('.b2-result'), rbox: q('.b2-rbox'), snd: q('.b2-snd'), log: q('.b2-log'), logList: q('.b2-log ul'),
     };
     U.ava = U.seat.map(e => e.querySelector('.b2-ava')); U.bub = U.seat.map(e => e.querySelector('.b2-bub'));
-    this._prev = null; this._sel = new Set(); this._cyc = {};
+    this._prev = null; this._sel = new Set(); this._cyc = {}; this._apKey = '';
     const sndIcon = () => { U.snd.textContent = Platform.audio.enabled ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(Platform.audio.enabled)); };
     sndIcon(); U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); };
     q('.b2-logbtn').onclick = () => U.log.classList.add('open'); q('.b2-logx').onclick = () => U.log.classList.remove('open');
@@ -421,14 +431,25 @@ if (typeof Platform !== 'undefined') {
     U.hand.querySelectorAll('.b2-card').forEach(el => { const on = this._sel.has(el.dataset.k); el.classList.toggle('sel', on); el.setAttribute('aria-pressed', String(on)); });
     const t = cards.length ? B.classify(cards) : null;
     const must = myTurn && s.first ? hand.find(c => c.r === '3' && c.s === 'c') : null;
-    const ok = myTurn && t && B.beats(t, s.table && s.table.t) && (!must || cards.includes(must));
+    const bao = myTurn && B.baoPai(me), notTop = bao && t && t.type === 'single' && B.cv(cards[0]) !== B.topCv(hand);
+    const ok = myTurn && t && B.beats(t, s.table && s.table.t) && (!must || cards.includes(must)) && !notTop;
+    // 壓得過的組合：決定牌型快捷、哪些牌亮著、是否只能過
+    const pool = myTurn ? B.legalPlays(hand, s.table, must, bao) : [];
+    const nobeat = myTurn && !!s.table && !pool.length;
+    const usable = new Set(pool.flat().map(key));
+    U.hand.querySelectorAll('.b2-card').forEach(el => el.classList.toggle('dim', myTurn && !usable.has(el.dataset.k)));
+    U.app.classList.toggle('nobeat', nobeat);
     U.play.disabled = !ok; U.play.textContent = ok ? `出 ${B.TYPE_NAME[t.type]}` : '出牌';
-    U.pass.disabled = !(myTurn && s.table);
-    U.tip.className = 'b2-tip' + (cards.length && !ok ? ' bad' : '');
-    U.tip.textContent = !cards.length ? (myTurn ? (s.table ? `要壓過 ${s.players[s.table.by].name} 的${B.TYPE_NAME[s.table.t.type]}` : must ? '第一手要含梅花 3' : '你有出牌權，出什麼都可以') : '')
-      : !t ? '這幾張不是合法牌型' : !myTurn ? `已選：${B.TYPE_NAME[t.type]}` : ok ? '再點一下選中的牌就出牌' : must && !cards.includes(must) ? '第一手要含梅花 3' : `${B.TYPE_NAME[t.type]}壓不過桌上的牌`;
+    U.pass.disabled = !(myTurn && s.table); U.pass.textContent = nobeat ? '沒牌可壓・過' : '過';
+    U.tip.className = 'b2-tip' + ((cards.length && !ok) || nobeat ? ' bad' : '');
+    U.tip.textContent = nobeat ? `壓不過 ${s.players[s.table.by].name} 的${B.TYPE_NAME[s.table.t.type]}，3 秒後自動過`
+      : !cards.length ? (myTurn ? (s.table ? `要壓過 ${s.players[s.table.by].name} 的${B.TYPE_NAME[s.table.t.type]}` : must ? '第一手要含梅花 3' : '你有出牌權，出什麼都可以') + (bao ? '（下家報牌，單張要出最大）' : '') : '')
+      : !t ? '這幾張不是合法牌型' : !myTurn ? `已選：${B.TYPE_NAME[t.type]}` : ok ? '再點一下選中的牌就出牌' : must && !cards.includes(must) ? '第一手要含梅花 3'
+      : notTop ? '下家報牌，單張要出最大的' : `${B.TYPE_NAME[t.type]}壓不過桌上的牌`;
+    // 壓不過：3 秒後自動過（同一個出牌時機只排一次）
+    const apKey = nobeat ? `${s.handNo}:${(s.trick || []).length}:${s.passSeq || 0}` : '';
+    if (apKey !== this._apKey) { this._apKey = apKey; if (nobeat) this._after(3000, () => { if (this._apKey === apKey && this._ui === U) this._send('pass'); }); }
     // 牌型快捷：輪到自己時列「壓得過的」
-    const pool = myTurn ? B.legalPlays(hand, s.table, must) : [];
     const by = {}; pool.forEach(cs => { const tp = B.classify(cs).type; (by[tp] = by[tp] || []).push(cs); });
     this._chipPool = by;
     U.chips.forEach(ch => { const n = (by[ch.dataset.t] || []).length; ch.querySelector('b').textContent = n ? n : '';
@@ -480,6 +501,8 @@ if (typeof Platform !== 'undefined') {
         if (fb.childElementCount !== n || newHand) fb.innerHTML = Array.from({ length: n }, (_, j) => `<i style="${fan(j, n, 5, .6)}${newHand ? `;--d:${600 + j * 4 * 40 + k * 40}ms` : ''}" class="${newHand ? 'deal' : ''}"></i>`).join('');
       }
       el.classList.toggle('turn', s.phase === 'play' && s.turn === i);
+      el.classList.toggle('bao', s.phase === 'play' && p.hand.length === 1);     // 報牌警示
+      el.classList.toggle('passed', s.phase === 'play' && !!(s.passed && s.passed[i])); // 這輪過了：變灰
     });
 
     if (newHand) {
@@ -517,7 +540,7 @@ if (typeof Platform !== 'undefined') {
         U.bub.forEach(b => { b.className = 'b2-bub'; });
       }
       // 過
-      if ((s.passSeq || 0) > (P.passSeq || 0) && s.lastPassBy != null) { const k = pos(s.lastPassBy); if (k) this._say(k, '過'); this.sfx.play('slide', { gain: .18, rate: .8 }); }
+      if ((s.passSeq || 0) > (P.passSeq || 0) && s.lastPassBy != null) { const k = pos(s.lastPassBy); if (k) this._say(k, '過'); Platform.audio.knock(); } // 過牌敲桌，同德州
       // 結算
       if (s.phase === 'scored' && P.phase !== 'scored') {
         U.spot.forEach(o => o.classList.add('old'));

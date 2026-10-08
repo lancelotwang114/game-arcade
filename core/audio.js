@@ -50,4 +50,16 @@ Platform.audio = {
   empty()  { this._tone(1000, 0.04, 'square', 0.25); this._tone(700, 0.05, 'square', 0.18, 0.04); }, // 空膛喀
   win()    { [523, 659, 784, 1047].forEach((f, i) => this._tone(f, 0.3, 'triangle', 0.35, i * 0.1)); },
   lose()   { [392, 330, 262].forEach((f, i) => this._tone(f, 0.35, 'sine', 0.3, i * 0.12)); },
+  // 過牌敲桌兩下（德州起用，各遊戲共用）：音效包無此聲，以低頻雜訊合成
+  knock() {
+    if (!this.enabled) return; const ac = this._ac(); if (!ac) return;
+    [0, .14].forEach(d => {
+      const n = Math.floor(ac.sampleRate * .08), b = ac.createBuffer(1, n, ac.sampleRate), x = b.getChannelData(0);
+      for (let i = 0; i < n; i++) x[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+      const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+      s.buffer = b; f.type = 'lowpass'; f.frequency.value = 260; g.gain.value = 2.2 * this.vol;
+      s.connect(f).connect(g).connect(ac.destination); s.start(ac.currentTime + d);
+    });
+  },
+  ding() { this._tone(880, .3, 'sine', .14); this._tone(1320, .35, 'sine', .1, .09); },
 };

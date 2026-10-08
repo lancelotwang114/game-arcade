@@ -528,19 +528,8 @@ if (typeof Platform !== 'undefined') {
   const TX_SND = ['card-shuffle', 'card-slide-1', 'card-slide-2', 'card-slide-3', 'card-slide-4', 'card-place-1', 'card-place-2', 'card-place-3', 'card-place-4',
     'card-shove-1', 'card-shove-2', 'chip-lay-1', 'chip-lay-2', 'chip-lay-3', 'chips-stack-1', 'chips-stack-2', 'chips-stack-3', 'chips-stack-4',
     'chips-collide-1', 'chips-collide-2', 'chips-collide-3', 'chips-handle-1', 'chips-handle-2', 'chips-handle-3'];
-  Texas.sfx = Object.assign(Platform.fx.sampler('games/texas/audio/', Object.fromEntries(TX_SND.map(n => [n, n + '.wav']))), {
-    // 過牌敲桌兩下：音效包無此聲，以低頻雜訊合成
-    knock() {
-      if (!Platform.audio.enabled) return; const ac = Platform.audio._ac(); if (!ac) return;
-      [0, .14].forEach(d => {
-        const n = Math.floor(ac.sampleRate * .08), b = ac.createBuffer(1, n, ac.sampleRate), x = b.getChannelData(0);
-        for (let i = 0; i < n; i++) x[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
-        const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
-        s.buffer = b; f.type = 'lowpass'; f.frequency.value = 260; g.gain.value = 2.2 * Platform.audio.vol;
-        s.connect(f).connect(g).connect(ac.destination); s.start(ac.currentTime + d);
-      });
-    },
-    ding() { Platform.audio._tone(880, .3, 'sine', .14); Platform.audio._tone(1320, .35, 'sine', .1, .09); },
+  Texas.sfx = Object.assign(Platform.fx.sampler('core/sfx/', Object.fromEntries(TX_SND.map(n => [n, n + '.wav']))), {
+    knock: () => Platform.audio.knock(), ding: () => Platform.audio.ding(), // 共用：core/audio.js
   });
 
   // ---------- 動畫小工具：時間軸在 core/fx.js（mount 時建立 this._tl）----------
