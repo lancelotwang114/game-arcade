@@ -429,7 +429,6 @@ if (typeof Platform !== 'undefined') {
       <header class="lb-top">
         <div class="lb-brand">騙子酒吧</div>
         <div class="lb-info">第 <b class="lb-rno">1</b> 巡</div>
-        <button class="lb-ibtn lb-snd" aria-label="音效開關"></button>
         <button class="lb-ibtn lb-logbtn" aria-label="牌局紀錄">☰</button>
       </header>
       <main class="lb-stage">
@@ -459,16 +458,13 @@ if (typeof Platform !== 'undefined') {
     const q = s => root.querySelector(s);
     const U = this._ui = {
       app: q('.lb-app'), stage: q('.lb-stage'), rno: q('.lb-rno'), tcard: q('.lb-tcard-wrap'), pile: q('.lb-pile'), claim: q('.lb-claim'), deck: q('.lb-deck'), log: q('.lb-log'),
-      stamp: q('.lb-stamp'), hand: q('.lb-hand'), tip: q('.lb-tip'), play: q('.lb-act.play'), liar: q('.lb-act.liar'), snd: q('.lb-snd'),
+      stamp: q('.lb-stamp'), hand: q('.lb-hand'), tip: q('.lb-tip'), play: q('.lb-act.play'), liar: q('.lb-act.liar'),
       rl: q('.lb-rl'), rlWho: q('.lb-rl-who'), rlCyl: q('.lb-rl-cyl'), rlGun: q('.lb-rl-gun'), rlMsg: q('.lb-rl-msg'), flash: q('.lb-flash'),
       seat: [q('.lb-me'), ...[1, 2, 3].map(p => q(`.lb-seat[data-p="${p}"]`))],
     };
     U.ava = U.seat.map(e => e.querySelector('.lb-ava')); U.bub = U.seat.map(e => e.querySelector('.lb-bub')); U.cyl = U.seat.map(e => e.querySelector('.lb-cyl'));
     this._prev = null; this._pend = null; this._handKey = ''; this._sel = new Set();
     if (this._3d) { this._3d.dispose(); this._3d = null; } this._3dp = null;
-    const sndIcon = () => { const on = Platform.audio.enabled; U.snd.textContent = on ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(on)); };
-    sndIcon();
-    U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); this.sfx.ambience(Platform.audio.enabled); };
     q('.lb-logbtn').onclick = () => U.log.classList.toggle('open');
     const me = () => this.O ? this.O.mySeat : 0;
     Platform.hud.mount(this, { root, bar: q('.lb-top'), me,

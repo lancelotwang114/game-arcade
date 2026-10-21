@@ -489,6 +489,8 @@ body::before {
 /* 嵌在牌桌遊戲廳（iframe）時：避開平台左上「← 回大廳」按鈕（12~107px） */
 html.in-arcade #lobby .lcard { padding-top: 72px; }
 html.in-arcade .pause-fab { left: 340px; }
+/* 大廳（arcade）：連線走平台自己的「連線」鈕，首頁的「連線對戰」入口藏起來 */
+html.in-arcade #lobby-home .mode-hero-btn.online { display: none; }
 
 /* ── 左上獨立暫停浮動按鈕 ── */
 .pause-fab {
@@ -8183,6 +8185,10 @@ const Game={
     setTimeout(()=>this.showDice(),200);
   },
   returnLobby(keepSave=false){
+    // 大廳（arcade）：先交給平台處理離開（取消確認則牌局原封不動）；確認離開時才照原語意放棄存檔、停語音；平台不可用才走原流程
+    if(document.documentElement.classList.contains('in-arcade')){
+      try{ parent.MJLeave(()=>{ if(!keepSave)this.clearSave(); speechSynthesis&&speechSynthesis.cancel(); }); return; }catch(e){}
+    }
     clearTimeout(this._showWinDefer);this._winFxUntil=0; // 演出中回大廳：取消延後的結算畫面
     document.getElementById('wov').style.display='none';
     document.getElementById('match-ov').style.display='none';
@@ -8235,6 +8241,7 @@ const Game={
   _saveKey:'mj_gstate_v1',
   saveGame(){
     if(!this.st||this.st.phase!=='playing')return;
+    if(this._online&&!this._isHost)return; // 大廳（arcade）：連線賓客的畫面由房主驅動，存了也無法當單機續玩，別讓它觸發「繼續上局」
     try{
       const snap={
         st:this.st,
@@ -10744,7 +10751,9 @@ async function init() {
   // 牌背樣式：建立大廳選擇器 + 還原上次選擇（未選則維持內建牌背）
   try {
     _buildTilebackSwatches();
-    const _savedBack = localStorage.getItem('mj_tileback_3d');
+    // 大廳（arcade）：平台指定牌背 ?tileback=（單機／連線都套用）優先；同走 applyTileBack → 記到 mj_tileback_3d。只呼叫一次，避免兩次非同步載入互搶
+    const _tbParam = new URLSearchParams(location.search).get('tileback');
+    const _savedBack = (_tbParam && TILE_BACKS.some(b => b.id === _tbParam)) ? _tbParam : localStorage.getItem('mj_tileback_3d');
     if (_savedBack) applyTileBack(_savedBack);  // lazy：applyTileBack 內部會即時載入
   } catch(e) {}
   const lobbyEl = document.getElementById('lobby');
@@ -10763,6 +10772,33 @@ async function init() {
       const _pn = document.getElementById('pname'); if (_pn) _pn.value = _br.name;
       const _jn = document.getElementById('ol-join-name'); if (_jn) _jn.value = _br.name;
       if (new URLSearchParams(location.search).get('online') === '1') Online.showCreate();
+    }
+    if (document.documentElement.classList.contains('in-arcade')) {
+      // 大廳（arcade）：沒走共用房間時，暱稱沿用平台存的 arcade_name（JSON 字串）
+      if (!_br) {
+        let _an = ''; try { _an = JSON.parse(localStorage.getItem('arcade_name') || '""'); } catch (e) {}
+        if (typeof _an === 'string' && _an.trim()) {
+          const _pn = document.getElementById('pname'); if (_pn) _pn.value = _an.trim();
+          const _jn = document.getElementById('ol-join-name'); if (_jn) _jn.value = _an.trim();
+        }
+      }
+      // 大廳（arcade）：平台「單機」進場 ?solo=1 → 帶入平台設定（選項存在才套用）後直接開局
+      const _sp = new URLSearchParams(location.search);
+      if (_sp.get('solo') === '1') {
+        const _onNew = () => {
+          Game.clearSave();
+          [['base','sbase'],['tai','stai'],['money','smoney'],['time','stime'],['speed','sspeed'],['quick','squickstart']].forEach(([k,id]) => {
+            const v = _sp.get(k), sel = document.getElementById(id);
+            if (v !== null && sel && [...sel.options].some(o => o.value === v)) sel.value = v;
+          });
+          Game.start(_sp.get('rounds') === 'south' ? 'south' : 'east');
+        };
+        // 大廳（arcade）：有單機中斷存檔 → 交平台詢問「繼續上局／重新開局」；平台不支援就直接開新局
+        const _snap = Game.loadSave();
+        if (_snap && !_snap.net) {
+          try { parent.MJResume(() => Game.resumeSavedGame(), _onNew); } catch (e) { _onNew(); }
+        } else _onNew();
+      }
     }
   } catch (e) {}
   // 邀請連結 ?room&host → 自動切到「加入」畫面並帶入連結（模組為 deferred，DOM 已就緒）
@@ -10795,6 +10831,7 @@ async function init() {
   } catch (e) {}
   // 連線對局中：關閉/重整前跳原生確認（手機瀏覽器可能不顯示）
   window.addEventListener('beforeunload',e=>{
+    if(window.__arcadeLeaving) return; // 大廳（arcade）：平台已確認離開，不再跳原生確認
     if(Game._online&&Game.st?.phase==='playing'){ e.preventDefault(); e.returnValue=''; }
   });
   // 手機切回前景：客戶端連線斷了就自動重連；房主與配對伺服器斷了就重新登記同一 id

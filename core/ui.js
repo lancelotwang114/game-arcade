@@ -22,7 +22,8 @@ Platform.ui = {
     tick(); this._tcT = setInterval(tick, 250);
   },
   // 全螢幕遮罩對話框。buttons: [{label, primary, onClick}]。回傳 {el, close}
-  modal({ title = '', html = '', buttons = [] } = {}) {
+  // onDismiss：按 Esc 關掉（沒按任何按鈕）時呼叫
+  modal({ title = '', html = '', buttons = [], onDismiss } = {}) {
     const ov = document.createElement('div');
     ov.className = 'modal-ov';
     const box = document.createElement('div');
@@ -44,7 +45,7 @@ Platform.ui = {
     requestAnimationFrame(() => ov.classList.add('show'));
     const first = row.querySelector('.btn-primary') || row.querySelector('button');
     if (first) first.focus();
-    function onKey(e) { if (e.key === 'Escape') close(); }
+    function onKey(e) { if (e.key === 'Escape') { close(); if (onDismiss) onDismiss(); } }
     document.addEventListener('keydown', onKey);
     function close() {
       document.removeEventListener('keydown', onKey);

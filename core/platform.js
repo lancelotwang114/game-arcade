@@ -39,6 +39,33 @@ const Platform = {
     if (!join && !this.store.get('arcade_name', '')) { this.askName('開房前先取個暱稱', () => this.launchOnline(id)); return; } // 別讓朋友看到「房主」
     this.launch(id, { online: true, join: join || null });
   },
+  // 只知道房主、不知道他正在玩哪款（輸入房間碼／遊戲失效的舊連結）：先連上，房主會帶我們進目前的遊戲，或一起在大廳等
+  joinHost(host, room) {
+    const n = this.net;
+    this.exit(); // 先離開原本的房間
+    n.init(this.store.get('arcade_name', '') || '玩家').then(() => { n.roomId = room; n.joinRoom(host); this.toast('連線中…'); })
+      .catch(e => this.toast('連線失敗：' + (e.message || e)));
+  },
+  // 房主帶著賓客在大廳時，會解散房間的動作（單機、加入別人的房間）先確認；預設按鈕是「取消」
+  confirmDisband(go) {
+    const n = this.net;
+    if (!(n && n.peer && n.isHost && n.conns.length)) { go(); return; }
+    this.ui.modal({
+      title: '要解散房間嗎？',
+      html: `<p>${n.conns.length} 位賓客正在等你選遊戲，這樣做會解散房間、請他們離開。<br>想帶他們一起玩，請按遊戲的「連線」。</p>`,
+      buttons: [{ label: '取消', primary: true }, { label: '解散並繼續', onClick: close => { close(); go(); } }],
+    });
+  },
+  // 連線中（房裡還有別人）離開遊戲先確認：房主會把賓客一起帶回大廳，賓客則是離開房間；預設按鈕是「取消」
+  confirmLeave(go) {
+    const n = this.net;
+    if (!(this._active && n && n.peer && n.conns.length)) { go(); return; }
+    this.ui.modal({
+      title: '要回大廳嗎？',
+      html: `<p>${n.isHost ? '賓客會跟你一起回到大廳，等你選下一款（房間保留）。' : '你會離開這個房間。'}</p>`,
+      buttons: [{ label: '取消', primary: true }, { label: '回大廳', onClick: close => { close(); go(); } }],
+    });
+  },
   // 連線前輸入暱稱（預填上次用的）；按確定才 go()，取消就留在大廳
   askName(title, go) {
     const m = this.ui.modal({
@@ -134,7 +161,7 @@ const Platform = {
     set(k, v)   { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
   },
 
-  // 以下服務由各 core 模組載入後掛上：audio, theme, ui, cards, toast, fx
+  // 以下服務由各 core 模組載入後掛上：audio, ui, cards, toast, fx
 };
 
 // 大廳卡片渲染
@@ -148,13 +175,13 @@ function renderLobby() {
     card.innerHTML = `<div class="gc-icon" aria-hidden="true">${g.icon || '🎲'}</div>
       <div class="gc-name">${g.name}</div>
       <div class="gc-desc">${g.desc || ''}</div>
-      <div class="gc-players">${g.players ? `${g.players.min}–${g.players.max} 人` : ''}</div>
+      <div class="gc-players">${g.players ? `${g.players.min === g.players.max ? g.players.min : `${g.players.min}–${g.players.max}`} 人` : ''}</div>
       <div class="gc-btns">
         <button class="gc-go" aria-label="單機遊玩 ${g.name}">單機</button>
         ${g.online ? `<button class="gc-online" aria-label="連線遊玩 ${g.name}"><span aria-hidden="true">🌐</span> 連線</button>` : ''}
         ${g.settings ? `<button class="gc-cfg" aria-label="${g.name} 設定"><span aria-hidden="true">⚙</span></button>` : ''}
       </div>`;
-    card.querySelector('.gc-go').onclick = () => Platform.launch(g.id);
+    card.querySelector('.gc-go').onclick = () => Platform.confirmDisband(() => Platform.launch(g.id));
     const ob = card.querySelector('.gc-online');
     if (ob) ob.onclick = () => Platform.launchOnline(g.id);
     const cb = card.querySelector('.gc-cfg');
@@ -171,6 +198,9 @@ function renderRoomBar() {
   if (!lobby) return;
   let bar = document.getElementById('room-bar');
   const on = n && n.peer && (n.isHost ? n.conns.length : n.conns.length && n.hostId);
+  // 賓客等房主選遊戲時，大廳按鈕全部停用（避免誤按就默默離房），只留房間列的「離開房間」
+  const wait = !!on && !n.isHost;
+  lobby.querySelectorAll('#game-grid button, #join-form input, #join-form button').forEach(b => { b.disabled = wait; });
   if (!on) { if (bar) bar.remove(); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'room-bar'; bar.setAttribute('aria-live', 'polite'); lobby.insertBefore(bar, document.getElementById('game-grid')); }
   bar.innerHTML = n.isHost
@@ -182,11 +212,19 @@ function renderRoomBar() {
 window.addEventListener('DOMContentLoaded', () => {
   renderLobby();
   const back = document.getElementById('back-btn');
-  if (back) back.onclick = () => Platform.leave();
-  // 由邀請連結進入 → 先輸入暱稱，再以賓客加入
+  if (back) back.onclick = () => Platform.confirmLeave(() => Platform.leave());
+  // 大廳輸入房間碼加入（房主 Peer ID = arc_ + 房間碼小寫，見 net.js init）
+  const jf = document.getElementById('join-form');
+  if (jf) jf.onsubmit = e => {
+    e.preventDefault();
+    const inp = document.getElementById('join-code'), code = inp.value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(code)) { Platform.toast('房間碼是 6 碼英文或數字'); inp.focus(); return; }
+    Platform.confirmDisband(() => Platform.askName(`加入房間 ${code}`, () => Platform.joinHost('arc_' + code.toLowerCase(), code)));
+  };
+  // 由邀請連結進入 → 先輸入暱稱，再以賓客加入；連結裡的遊戲不存在就只連房主，由房主帶進目前的遊戲
   if (Platform._pendingJoin) {
     const j = Platform._pendingJoin; Platform._pendingJoin = null;
     const g = Platform.games.find(x => x.id === j.game);
-    Platform.askName(`加入${g ? g.name : '連線房間'}`, () => Platform.launchOnline(j.game, { room: j.room, host: j.host }));
+    Platform.askName(`加入${g ? g.name : '連線房間'}`, () => g ? Platform.launchOnline(j.game, { room: j.room, host: j.host }) : Platform.joinHost(j.host, j.room));
   }
 });

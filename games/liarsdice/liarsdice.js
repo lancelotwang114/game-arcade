@@ -248,7 +248,6 @@ if (typeof Platform !== 'undefined') {
       <header class="ld-top">
         <div class="ld-brand">吹牛骰子</div>
         <div class="ld-info"><span class="ld-rinfo"></span><span class="ld-wild">1 點萬用</span></div>
-        <button class="ld-ibtn ld-snd" aria-label="音效開關"></button>
         <button class="ld-ibtn ld-logbtn" aria-label="遊戲紀錄">☰</button>
       </header>
       <main class="ld-stage">${seat(1)}${seat(2)}${seat(3)}${seat(0)}
@@ -271,12 +270,10 @@ if (typeof Platform !== 'undefined') {
       app: q('.ld-app'), rinfo: q('.ld-rinfo'), wild: q('.ld-wild'), cur: q('.ld-cur'), curby: q('.ld-curby'), tally: q('.ld-tally'), stamp: q('.ld-stamp'),
       seat: [0, 1, 2, 3].map(p => q(`.ld-seat[data-p="${p}"]`)), qv: q('.ld-qv'), qm: q('.ld-qm'), qp: q('.ld-qp'), tip: q('.ld-tip'),
       fbtn: [...root.querySelectorAll('.ld-fbtn')], bid: q('.ld-act.bid'), open: q('.ld-act.open'),
-      rl: q('.ld-rl'), rlWho: q('.ld-rlwho'), rlCyl: q('.ld-rlcyl'), rlMsg: q('.ld-rlmsg'), flash: q('.ld-flash'), snd: q('.ld-snd'), log: q('.ld-log'), logList: q('.ld-log ul'),
+      rl: q('.ld-rl'), rlWho: q('.ld-rlwho'), rlCyl: q('.ld-rlcyl'), rlMsg: q('.ld-rlmsg'), flash: q('.ld-flash'), log: q('.ld-log'), logList: q('.ld-log ul'),
     };
     U.cup = U.seat.map(e => e.querySelector('.ld-cup')); U.dice = U.seat.map(e => e.querySelector('.ld-dice')); U.bub = U.seat.map(e => e.querySelector('.ld-bub'));
     this._prev = null; this._q = 4; this._f = 2; this._shotPend = -1;
-    const sndIcon = () => { U.snd.textContent = Platform.audio.enabled ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(Platform.audio.enabled)); };
-    sndIcon(); U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); this.sfx.ambience(Platform.audio.enabled); };
     const logOpen = on => { U.log.classList.toggle('open', on); U.log.inert = !on; }; logOpen(false); // 收起時不可 Tab 進去
     q('.ld-logbtn').onclick = () => logOpen(true); q('.ld-logx').onclick = () => logOpen(false);
     U.qm.onclick = () => { this._q--; this._paintPanel(); }; U.qp.onclick = () => { this._q++; this._paintPanel(); };

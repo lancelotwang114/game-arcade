@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-TW" data-theme="felt">
+<html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,17 +19,19 @@
 <div id="lobby">
   <div class="lobby-title">牌桌遊戲廳</div>
   <div class="lobby-sub">TABLE&nbsp;ARCADE</div>
+  <form id="join-form">
+    <input id="join-code" maxlength="6" placeholder="朋友的房間碼" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="房間碼">
+    <button class="btn">加入房間</button>
+  </form>
   <div id="game-grid"></div>
 </div>
 
 <div id="stage"></div>
-<div id="back-bar"></div>
 <button id="back-btn" style="display:none">← 回大廳</button>
 
 <!-- core -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
 <script src="core/platform.js"></script>
-<script src="core/theme.js"></script>
 <script src="core/audio.js"></script>
 <script src="core/ui.js"></script>
 <script src="core/fx.js"></script>
@@ -44,10 +46,5 @@
 <script src="games/bigtwo/bigtwo.js"></script>
 <script src="games/liarsdice/liarsdice.js"></script>
 <script src="games/blackjack/blackjack.js"></script>
-
-<script>
-  // back-btn 由 platform.js 接管顯示/隱藏；初始隱藏
-  document.getElementById('back-btn').onclick = () => Platform.leave();
-</script>
 </body>
 </html>

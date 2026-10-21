@@ -581,7 +581,6 @@ if (typeof Platform !== 'undefined') {
         <div class="tx-info">第 <b class="tx-hno">1</b> 手<span class="tx-blinds"> · 盲注 <b>${this.SB}/${this.BB}</b></span></div>
         <button class="tx-ibtn tx-addai" aria-label="加入一位電腦玩家" hidden>＋🤖<span class="tx-lbl"> 電腦</span></button>
         <button class="tx-ibtn tx-invite" aria-label="邀請朋友中途入座" hidden>🔗<span class="tx-lbl"> 邀請</span></button>
-        <button class="tx-ibtn tx-snd" aria-label="音效開關"></button>
         <button class="tx-ibtn tx-style" aria-label="牌面風格">🎴<span class="tx-lbl"> 牌面</span></button>
         <button class="tx-ibtn tx-logbtn" aria-label="牌局紀錄">☰</button>
       </header>
@@ -621,14 +620,11 @@ if (typeof Platform !== 'undefined') {
       bet: ks.map(p => q(`.tx-bet[data-p="${p}"]`)), addai: q('.tx-addai'), invite: q('.tx-invite'),
       held: q('.tx-held'), str: q('.tx-str'), wait: q('.tx-wait'),
       raise: q('.tx-raise'), presets: q('.tx-presets'), rng: q('.tx-rng'), rval: q('.tx-rval'), rlbl: q('.tx-rlbl'), rok: q('.tx-rok'),
-      fold: q('.tx-fold'), call: q('.tx-call'), raiseBtn: q('.tx-raisebtn'), snd: q('.tx-snd'), log: q('.tx-log'), logList: q('.tx-log ul'),
+      fold: q('.tx-fold'), call: q('.tx-call'), raiseBtn: q('.tx-raisebtn'), log: q('.tx-log'), logList: q('.tx-log ul'),
     };
     U.ava = U.seat.map(e => e.querySelector('.tx-ava')); U.st = U.seat.map(e => e.querySelector('.tx-st'));
     U.bub = U.seat.map(e => e.querySelector('.tx-bubble')); U.hole = U.seat.map(e => e.querySelector('.tx-hole')); // [0] 為 null（自己用 held）
     this._prev = null; this._paid = null; this._R = null; this._strLabel = '';
-    const sndIcon = () => { const on = Platform.audio.enabled; U.snd.textContent = on ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(on)); };
-    sndIcon();
-    U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); };
     q('.tx-logbtn').onclick = () => U.log.classList.add('open');
     U.addai.onclick = () => { if (this._addSeat('', true) >= 0) this.render(); };
     U.invite.onclick = () => {

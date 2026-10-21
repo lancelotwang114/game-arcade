@@ -26,7 +26,7 @@ Platform.voice = {
 Platform.hud = {
   QUICK: ['快一點啦', '好牌', '謝謝', '厲害', '不好意思', '等我一下', '再來一局', '哈哈'],
   AI_LINES: ['好啦好啦', '這把穩了', '嘿嘿', '你們手氣真好', '別急嘛', '這手不錯', '認真打囉', '再來再來', '哎呀', '看我的'],
-  LABEL: { snd: '音效', style: '牌面', logbtn: '紀錄', addai: '加電腦', invite: '邀請' },
+  LABEL: { style: '牌面', logbtn: '紀錄', addai: '加電腦', invite: '邀請' },
   G: null, o: null,
 
   mount(G, o) {
@@ -78,11 +78,9 @@ Platform.hud = {
     });
     this._bSpd._names = SPD_NAME;
     this._bAuto = btn('auto', '代打', '🤖', '代打（交給電腦幫你打）', () => this.requestAuto(!this._myAuto()));
-    // 音量：點開滑桿；滑鼠滾輪在「音量」或遊戲原本的靜音鈕上也能調
-    this._bVol = btn('vol', '音量', '🔉', '音量（點開滑桿，或用滑鼠滾輪調整）', () => this._volPop());
-    const wheel = e => { e.preventDefault(); this.setVol(Platform.audio.vol + (e.deltaY < 0 ? .1 : -.1)); };
-    [this._bVol, bar.querySelector('[class*="-snd"]')].forEach(b => b && b.addEventListener('wheel', wheel, { passive: false }));
-    this._bVoice = btn('voice', '語音', '', '語音報牌開關', () => { Platform.voice.setEnabled(!Platform.voice.enabled); if (Platform.voice.enabled) Platform.voice.say('語音報牌開啟'); this.sync(); });
+    // 音量：點開滑桿＋音效／語音開關；滑鼠滾輪在「音量」上也能調
+    this._bVol = btn('vol', '音量', '🔉', '音量與音效、語音開關（點開，或用滑鼠滾輪調整）', () => this._volPop());
+    this._bVol.addEventListener('wheel', e => { e.preventDefault(); this.setVol(Platform.audio.vol + (e.deltaY < 0 ? .1 : -.1)); }, { passive: false });
     this._bPause = btn('pause', '暫停', '⏸', '暫停／繼續（P）', () => this.setPause(!this.G._paused));
     this._bChat = btn('chat', '聊天', '💬', '聊天（C）', () => this.toggleChat());
     btn('bug', '錯誤回報', '🐞', '複製除錯紀錄（遇到錯誤時按，再貼給房主）', () => this.copyReport());
@@ -105,9 +103,16 @@ Platform.hud = {
   _volPop() {
     if (this._volBox) { this._volBox.remove(); this._volBox = this._volIn = null; return; }
     const box = this._volBox = document.createElement('div'); box.className = 'hud-volpop';
-    box.innerHTML = '<span>🔈</span><input type="range" min="0" max="100" step="5" aria-label="音量"><span>🔊</span><b></b>';
+    box.innerHTML = '<div class="hud-volrow"><span>🔈</span><input type="range" min="0" max="100" step="5" aria-label="音量"><span>🔊</span><b></b></div>'
+      + '<div class="hud-volrow"><button class="hud-tg" data-k="snd"></button><button class="hud-tg" data-k="voice"></button></div>';
     const inp = this._volIn = box.querySelector('input'); inp.value = Math.round(Platform.audio.vol * 100);
     inp.oninput = () => this.setVol(inp.value / 100);
+    box.querySelector('[data-k="snd"]').onclick = () => { // 原本各遊戲右上的「音效」鈕併到這裡
+      const on = !Platform.audio.enabled; Platform.audio.setEnabled(on);
+      const sfx = this.G && this.G.sfx; if (sfx && sfx.ambience) sfx.ambience(on); // 有環境音的遊戲（騙子酒吧、吹牛骰子）一起開關
+      this.sync();
+    };
+    box.querySelector('[data-k="voice"]').onclick = () => { Platform.voice.setEnabled(!Platform.voice.enabled); if (Platform.voice.enabled) Platform.voice.say('語音報牌開啟'); this.sync(); };
     box.addEventListener('wheel', e => { e.preventDefault(); this.setVol(Platform.audio.vol + (e.deltaY < 0 ? .1 : -.1)); }, { passive: false });
     const r = this._bVol.getBoundingClientRect(), shown = r.width > 0; // 手機下拉收起後按鈕不可見：改貼右上
     box.style.top = (shown ? r.bottom + 18 : 64) + 'px'; box.style.right = (shown ? Math.max(8, innerWidth - r.right) : 8) + 'px';
@@ -125,9 +130,14 @@ Platform.hud = {
     if (st && st.players) st.players.forEach((p, i) => { const el = this.o.seatEl(i); if (el) el.classList.toggle('hud-auto', !!p.auto); });
     this._bSpd.hidden = !host; this._bSpd.textContent = this._bSpd._names[G.AI_SPEED] || '正常';
     this._bAuto.classList.toggle('on', this._myAuto());
-    const vp = Math.round(Platform.audio.vol * 100); this._bVol.dataset.label = `音量 ${vp}%`; this._bVol.textContent = vp ? (vp < 50 ? '🔉' : '🔊') : '🔈';
-    if (this._volBox) this._volBox.querySelector('b').textContent = vp + '%';
-    this._bVoice.textContent = Platform.voice.enabled ? '🗣' : '🔕'; this._bVoice.classList.toggle('on', Platform.voice.enabled);
+    const vp = Math.round(Platform.audio.vol * 100), snd = Platform.audio.enabled;
+    this._bVol.dataset.label = snd ? `音量 ${vp}%` : '靜音'; this._bVol.textContent = !snd ? '🔇' : vp ? (vp < 50 ? '🔉' : '🔊') : '🔈';
+    if (this._volBox) {
+      this._volBox.querySelector('b').textContent = vp + '%';
+      const tg = (k, on, text) => { const b = this._volBox.querySelector(`[data-k="${k}"]`); b.textContent = text; b.setAttribute('aria-pressed', String(on)); };
+      tg('snd', snd, snd ? '🔊 音效：開' : '🔇 音效：關');
+      tg('voice', Platform.voice.enabled, Platform.voice.enabled ? '🗣 語音報牌：開' : '🔕 語音報牌：關');
+    }
     this._bPause.hidden = !host; this._bPause.textContent = G._paused ? '▶' : '⏸'; this._bPause.classList.toggle('on', !!G._paused);
   },
 

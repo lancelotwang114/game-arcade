@@ -350,7 +350,6 @@ if (typeof Platform !== 'undefined') {
       <header class="bj-top">
         <div class="bj-brand">21 點</div>
         <div class="bj-info"></div>
-        <button class="bj-ibtn bj-snd" aria-label="音效開關"></button>
         <button class="bj-ibtn bj-style" aria-label="牌面風格">🎴</button>
         <button class="bj-ibtn bj-logbtn" aria-label="牌局紀錄">☰</button>
       </header>
@@ -359,10 +358,8 @@ if (typeof Platform !== 'undefined') {
       <aside class="bj-log" aria-label="牌局紀錄"><h2>牌局紀錄 <button class="bj-ibtn bj-logx" aria-label="關閉">✕</button></h2><ul></ul></aside>
     </div>`;
     const q = s => root.querySelector(s);
-    const U = this._ui = { app: q('.bj-app'), info: q('.bj-info'), dealer: q('.bj-dealer'), seats: q('.bj-seats'), dock: q('.bj-dock'), snd: q('.bj-snd'), log: q('.bj-log'), logList: q('.bj-log ul') };
+    const U = this._ui = { app: q('.bj-app'), info: q('.bj-info'), dealer: q('.bj-dealer'), seats: q('.bj-seats'), dock: q('.bj-dock'), log: q('.bj-log'), logList: q('.bj-log ul') };
     this._prev = null; this._seen = {}; this._amt = 0; this._dockKey = '';
-    const sndIcon = () => { U.snd.textContent = Platform.audio.enabled ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(Platform.audio.enabled)); };
-    sndIcon(); U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); };
     const logOpen = on => { U.log.classList.toggle('open', on); U.log.inert = !on; }; logOpen(false);
     q('.bj-logbtn').onclick = () => logOpen(true); q('.bj-logx').onclick = () => logOpen(false);
     q('.bj-style').onclick = () => Platform.ui.modal({ title: '選擇牌面風格', html: '即時切換（會記住）',

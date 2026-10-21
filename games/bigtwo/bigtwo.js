@@ -376,7 +376,6 @@ if (typeof Platform !== 'undefined') {
       <header class="b2-top">
         <div class="b2-brand">大老二</div>
         <div class="b2-info">第 <b class="b2-hno">1</b> 局<span class="b2-target"> · 每點 $${B.UNIT}，有人輸光即結束</span></div>
-        <button class="b2-ibtn b2-snd" aria-label="音效開關"></button>
         <button class="b2-ibtn b2-style" aria-label="牌面風格">🎴</button>
         <button class="b2-ibtn b2-logbtn" aria-label="牌局紀錄">☰</button>
       </header>
@@ -403,7 +402,7 @@ if (typeof Platform !== 'undefined') {
       app: q('.b2-app'), hno: q('.b2-hno'), status: q('.b2-status'), type: q('.b2-type'), deck: q('.b2-deck'),
       seat: [q('.b2-me'), ...[1, 2, 3].map(p => q(`.b2-seat[data-p="${p}"]`))], spot: [0, 1, 2, 3].map(p => q(`.b2-spot[data-p="${p}"]`)),
       hand: q('.b2-hand'), tip: q('.b2-tip'), chips: [...root.querySelectorAll('.b2-chip')], play: q('.b2-play'), pass: q('.b2-pass'),
-      result: q('.b2-result'), rbox: q('.b2-rbox'), snd: q('.b2-snd'), log: q('.b2-log'), logList: q('.b2-log ul'),
+      result: q('.b2-result'), rbox: q('.b2-rbox'), log: q('.b2-log'), logList: q('.b2-log ul'),
     };
     U.ava = U.seat.map(e => e.querySelector('.b2-ava')); U.bub = U.seat.map(e => e.querySelector('.b2-bub'));
     this._prev = null; this._sel = new Set(); this._cyc = {}; this._apKey = '';
@@ -413,8 +412,6 @@ if (typeof Platform !== 'undefined') {
         const ks = new Set(cs.map(key)); U.hand.querySelectorAll('.b2-card').forEach(el => el.classList.toggle('peek', ks.has(el.dataset.k))); };
       ch.onmouseleave = () => U.hand.querySelectorAll('.peek').forEach(el => el.classList.remove('peek'));
     });
-    const sndIcon = () => { U.snd.textContent = Platform.audio.enabled ? '🔊' : '🔇'; U.snd.setAttribute('aria-pressed', String(Platform.audio.enabled)); };
-    sndIcon(); U.snd.onclick = () => { Platform.audio.setEnabled(!Platform.audio.enabled); sndIcon(); };
     q('.b2-logbtn').onclick = () => U.log.classList.add('open'); q('.b2-logx').onclick = () => U.log.classList.remove('open');
     q('.b2-style').onclick = () => Platform.ui.modal({ title: '選擇牌面風格', html: '即時切換（會記住）',
       buttons: Object.keys(Platform.cards.STYLE_NAMES).map(k => ({ label: Platform.cards.STYLE_NAMES[k] + (Platform.cards.style === k ? ' ✓' : ''), primary: Platform.cards.style === k,
@@ -433,7 +430,9 @@ if (typeof Platform !== 'undefined') {
     let idx = 0;
     U.hand.innerHTML = rows.map(row => `<div class="b2-row">${row.map((c, k) => {
       const d = deal ? `--d:${dealDelay[idx] || 0}ms;` : ''; idx++;
-      return cardHTML(c, (this._sel.has(key(c)) ? 'sel ' : '') + (deal ? 'deal' : ''), d + fan(k, row.length, rows.length === 1 ? 6 : 2.5, 0)); // 直式兩排也各自成扇形
+      // 橫式單排扇形：轉軸在牌下方很遠，每張 6° 時 13 張會左右蓋到頭像與出牌鈕、外側往下沉出畫面（1024×768 實測）→ 改 3.5°，並依牌寬等比往上抬
+      const lift = rows.length === 1 ? `;translate:0 calc(var(--w) * ${(-Math.abs(k - (row.length - 1) / 2) * .06).toFixed(2)})` : '';
+      return cardHTML(c, (this._sel.has(key(c)) ? 'sel ' : '') + (deal ? 'deal' : ''), d + fan(k, row.length, rows.length === 1 ? 3.5 : 2.5, 0) + lift); // 直式兩排也各自成扇形
     }).join('')}</div>`).join('');
     U.hand.querySelectorAll('.b2-card').forEach(el => {
       el.setAttribute('role', 'button'); el.tabIndex = 0;
