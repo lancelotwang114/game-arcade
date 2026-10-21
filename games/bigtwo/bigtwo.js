@@ -570,7 +570,7 @@ if (typeof Platform !== 'undefined') {
         U.type.textContent = B.TYPE_NAME[e.type] + (bomb ? '！' : ''); U.type.classList.toggle('bomb', bomb); Platform.fx.restart(U.type, 'pop');
         if (k) this._say(k, B.TYPE_NAME[e.type], 'type');
         Platform.voice.say(B._voiceOf(e));
-        if (pl[e.by].hand.length === 1) tl.after(() => { Platform.voice.say(`${pl[e.by].name} 報牌`); if (k) this._say(k, '報牌！', 'type'); }, 1100);
+        if (pl[e.by].hand.length === 1) tl.after(() => { Platform.voice.say('報牌'); if (k) this._say(k, '報牌！', 'type'); }, 1100);
         if (!k || e.by === me) this._sel = new Set();
       }
       // 一輪結束：桌上牌收走
@@ -590,7 +590,7 @@ if (typeof Platform !== 'undefined') {
         // 贏牌特效：閃電劈向贏家、金色光環、「出完！」印章、彩帶，之後才出結算面板
         const kw = pos(s.winner), wEl = kw ? U.seat[kw].querySelector('.b2-pod') : U.seat[0];
         tl.after(() => {
-          this._bolt(wEl, 3, `${pl[s.winner].name} 出完！`); U.seat[kw].classList.add('win'); Platform.voice.say(`${pl[s.winner].name} 出完了`);
+          this._bolt(wEl, 3, `${pl[s.winner].name} 出完！`); U.seat[kw].classList.add('win'); Platform.voice.say('出完了');
           Platform.audio._noise(1.4, .9, 30); Platform.audio._tone(55, .9, 'sawtooth', .35); this.sfx.play('slam', { gain: 1 });
           const r = wEl.getBoundingClientRect(); if (!Platform.fx.reduced()) Platform.fx.confetti(r.left + r.width / 2, r.top + r.height / 2, 40);
         }, 350);

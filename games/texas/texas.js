@@ -755,7 +755,7 @@ if (typeof Platform !== 'undefined') {
         }
         if (!p.last || !((p.acted && !P.acted[i]) || p.last !== P.last[i])) return;
         this._pop(U.bub[k], actText(p.last), actKind(p.last));
-        Platform.voice.say(actText(p.last)); // 語音報：跟注 20／加注到 100／全下／過牌／蓋牌
+        Platform.voice.say(actText(p.last).replace(/\s*[\d,]+$/, '').replace('加注到', '加注')); // 語音報：跟注／加注／全下／過牌／蓋牌（預錄不念金額）
         if (p.last === '過牌') this.sfx.knock();
         if (p.folded && !P.folded[i]) {
           this.sfx.play('card-shove', { gain: .7 });
@@ -782,14 +782,15 @@ if (typeof Platform !== 'undefined') {
         const gain = i => pl[i].chips - (P.chips[i] - (pl[i].totalInvested - P.inv[i])); // 扣回同一次更新內才投入的跟注額
         const iWin = win.includes(me), total = pl.reduce((a, p) => a + p.totalInvested, 0);
         let head, sub;
+        let say = '其他人蓋牌';
         if (s.street === 'idle') { head = iWin ? '你贏了' : `${pl[win[0]].name} 贏了`; sub = `其他人蓋牌 · 贏得 ${gain(win[0])}`; }
         else {
           const h = this.bestHand([...pl[win[0]].hole, ...s.board]);
           head = iWin ? `${h.name}！` : `${win.map(i => pl[i].name).join('、')} 贏了`;
-          sub = iWin ? `你贏得 ${gain(me)}` : `${h.name} · 贏得 ${win.reduce((a, i) => a + gain(i), 0)}`;
+          sub = iWin ? `你贏得 ${gain(me)}` : `${h.name} · 贏得 ${win.reduce((a, i) => a + gain(i), 0)}`; say = h.name;
         }
         this._count(U.potv, total, 400, Math.min(t, 600));
-        this._fx(() => { U.banner.firstChild.textContent = head; U.banner.lastChild.textContent = sub; U.banner.className = 'tx-banner'; void U.banner.offsetWidth; U.banner.classList.add('show'); Platform.voice.say(sub); }, t);
+        this._fx(() => { U.banner.firstChild.textContent = head; U.banner.lastChild.textContent = sub; U.banner.className = 'tx-banner'; void U.banner.offsetWidth; U.banner.classList.add('show'); Platform.voice.say(say); }, t); // 念牌型（預錄不念金額）
         payT = t + 900;
         win.forEach((i, w) => {
           for (let c = 0; c < 6; c++) this._fly(U.pot, U.ava[pos(i)], '<span class="tx-chip gold"></span>', 750, payT + c * 140 + w * 60);

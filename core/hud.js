@@ -4,22 +4,32 @@
             takeover(i)?: 座位 i 剛改由電腦接手時補一步（預設：輪到他就 G.tick()） }
    遊戲物件 G 需有：st.players[i]（isAI）、_after(ms, fn)、render()；連線時 O（isHost / seatOf / names）與 _push() */
 
-// ---------- 語音報牌：瀏覽器中文語音合成 ----------
+// ---------- 語音報牌：Edge TTS 預錄（tools/gen_voice.py → core/voice/<文字>.mp3 + clips.json） ----------
+// 不用瀏覽器合成語音：清單外的句子（名字、金額、自由喊話）就不念
 Platform.voice = {
   enabled: Platform.store.get('arcade_voice', true),
-  setEnabled(v) { this.enabled = !!v; Platform.store.set('arcade_voice', this.enabled); if (!v && window.speechSynthesis) speechSynthesis.cancel(); },
+  _clips: {}, _src: null, _seq: 0, // _seq：只播最新一句（解碼較慢的舊句不蓋掉新句；離開遊戲也作廢在途的句子）
+  _list: null, // clips.json 載入後的 Set；只抓清單內的檔，免得 404 洗版 console
+  setEnabled(v) { this.enabled = !!v; Platform.store.set('arcade_voice', this.enabled); if (!v) this._stop(); },
+  _stop() { this._seq++; try { if (this._src) this._src.stop(); } catch (e) {} this._src = null; },
   say(text) {
-    if (!this.enabled || !Platform.audio.enabled || !window.speechSynthesis || !text) return;
-    try {
-      const u = new SpeechSynthesisUtterance(String(text).slice(0, 30)); u.lang = 'zh-TW'; u.rate = 1.1; u.volume = Math.min(1, Platform.audio.vol * 1.4);
-      const v = this._voice(); if (v) u.voice = v;
-      speechSynthesis.cancel(); speechSynthesis.speak(u); // 新的一句蓋掉舊的，避免排隊越講越慢
-    } catch (e) {}
-  },
-  _voice() {
-    if (this._v) return this._v;
-    const vs = speechSynthesis.getVoices(); if (!vs.length) return null;
-    return this._v = vs.find(v => /zh[-_]TW/i.test(v.lang)) || vs.find(v => /zh[-_](HK|CN)|^zh/i.test(v.lang)) || null;
+    if (!this.enabled || !Platform.audio.enabled || !text) return;
+    const ac = Platform.audio._ac(); if (!ac) return;
+    text = String(text).trim();
+    const my = ++this._seq;
+    this._list = this._list || fetch('core/voice/clips.json').then(r => r.json()).then(a => new Set(a)).catch(() => { this._list = null; return new Set(); }); // 失敗下次再抓
+    this._list.then(set => {
+      if (!set.has(text)) return;
+      const buf = this._clips[text] || (this._clips[text] = fetch('core/voice/' + encodeURIComponent(text) + '.mp3').then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then(b => new Promise((ok, no) => ac.decodeAudioData(b, ok, no))) // 回呼寫法：舊版 iOS Safari 不支援 Promise 版
+        .catch(e => { delete this._clips[text]; throw e; })); // 抓檔／解碼失敗不快取，下次再試
+      return buf.then(b => {
+        if (my !== this._seq || !this.enabled || !Platform.audio.enabled || ac.state !== 'running') return; // 已有更新的一句／音訊還沒解鎖：過期的不播
+        try { if (this._src) this._src.stop(); } catch (e) {} // 新的一句蓋掉舊的，避免排隊越講越慢
+        const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = b; g.gain.value = Math.min(1, Platform.audio.vol * 1.4);
+        s.connect(g).connect(ac.destination); s.start(0, .15); this._src = s; // ponytail: Edge 輸出開頭約 0.19 秒靜音（同麻將實測），從 0.15 秒起播
+      });
+    }).catch(() => {});
   },
 };
 
@@ -52,7 +62,7 @@ Platform.hud = {
     document.removeEventListener('keydown', this._key);
     [this._tools, this._bMore, this._chat, this._pauseOv, this._volBox].forEach(el => el && el.remove());
     this._tools = this._bMore = this._chat = this._pauseOv = this._volBox = this._volIn = null;
-    if (window.speechSynthesis) speechSynthesis.cancel();
+    Platform.voice._stop();
     this.G = this.o = null;
   },
 

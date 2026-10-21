@@ -3622,44 +3622,17 @@ const Snd={
       setTimeout(()=>this.play(300+i*30,.04,'square',.12),ms);
     });
   },
-  // Voice: pick best available zh-TW voice
-  _bestVoice:null,
-  _pickVoice(gender){
-    // gender: 'female', 'male', 'auto'
-    if(this._bestVoice&&this._voiceGender===gender)return this._bestVoice;
-    const voices=speechSynthesis.getVoices();
-    if(!voices.length)return null;
-    const zhVoices=voices.filter(v=>v.lang==='zh-TW'||v.lang==='zh-HK'||v.lang.startsWith('zh'));
-    if(!zhVoices.length){console.log('[Voice] No zh voices. All:',voices.map(v=>v.name+' '+v.lang).slice(0,8).join(', '));return null;}
-    console.log('[Voice] Available zh:',zhVoices.map(v=>v.name+' '+v.lang).join(', '));
-    let picked=null;
-    if(gender==='female'){
-      // Female: look for female-associated names
-      const femaleHints=/mei|meijia|美佳|tingting|曉雨|yating|雅婷|sin-ji|美嘉|Kyoko|Google 國語|Google 中文|female/i;
-      picked=zhVoices.find(v=>femaleHints.test(v.name)&&!/compact/i.test(v.name))
-             ||zhVoices.find(v=>femaleHints.test(v.name))
-             ||zhVoices.find(v=>v.lang==='zh-TW'&&!/compact/i.test(v.name))
-             ||zhVoices[0];
-    } else if(gender==='male'){
-      const maleHints=/male|雄|kun|zhang|wei|guangliang|慶龍|zhiyu|男|man/i;
-      picked=zhVoices.find(v=>maleHints.test(v.name)&&!/compact/i.test(v.name))
-             ||zhVoices.find(v=>maleHints.test(v.name))
-             // fallback: pick the second zh voice (often different gender)
-             ||zhVoices[1]||zhVoices[0];
-    } else {
-      // auto: best quality
-      picked=zhVoices.find(v=>/neural|enhanced|premium|siri/i.test(v.name))
-             ||zhVoices.find(v=>v.lang==='zh-TW'&&!/compact/i.test(v.name))
-             ||zhVoices[0];
-    }
-    this._bestVoice=picked;this._voiceGender=gender;
-    console.log('[Voice] Picked:',picked?.name,picked?.lang);
-    return picked;
-  },
-  // Edge TTS 預錄語音：tools/gen_voice.py 產生 audio/voice/<文字>.mp3；缺檔才退回瀏覽器語音
+  // Edge TTS 預錄語音：tools/gen_voice.py 產生 audio/voice/<文字>.mp3；沒有預錄檔就不出聲（不用瀏覽器語音）
   // ponytail: 首次播放才抓檔（每檔約 12KB），不預載；網路慢時第一次會晚一點
+  // 已有預錄檔的文字，必須與 tools/gen_voice.py 產出的檔案一致；不在清單內不 fetch（避免 404 紅字）
+  _CLIP_TEXTS:new Set([
+    ...TN.man,...TN.pin,...TN.sou,...TN.honor,
+    '吃','碰','槓','補花','聽牌','胡牌','自摸',
+    ...['東','南','西','北'].flatMap(d=>['聽牌','胡牌','自摸'].map(a=>d+'家'+a)),
+    '快一點啦','好牌','謝謝','厲害','不好意思','等我一下','再來一局','哈哈']),
   _clips:{}, _clipSrc:null,
   _clip(text){
+    if(!this._CLIP_TEXTS.has(text)) return Promise.reject(new Error('no clip'));
     return this._clips[text]||(this._clips[text]=fetch(`audio/voice/${encodeURIComponent(text)}.mp3`)
       .then(r=>{ if(!r.ok) throw new Error('no clip'); return r.arrayBuffer(); })
       .then(b=>this.ctx.decodeAudioData(b)));
@@ -3679,24 +3652,7 @@ const Snd={
   say(tileName){
     if(this.volume===0||this.theme==='mute')return; // 靜音時也不要念
     if((Game?.settings?.voice||'auto')==='off')return;
-    this._playClip(tileName).catch(()=>this._sayTTS(tileName));
-  },
-  _sayTTS(tileName){
-    if(!window.speechSynthesis)return;
-    const voicePref=Game?.settings?.voice||'auto';
-    const u=new SpeechSynthesisUtterance(tileName);
-    u.lang='zh-TW';
-    const spd=Game?.aiSpeed||'normal';
-    const baseRate=Game?.settings?.rate||1.05;
-    const rateMap={slow:0.82,normal:1.0,fast:1.4,turbo:2.0};
-    u.rate=Math.min(baseRate*(rateMap[spd]??1.0),2.0);
-    u.pitch=voicePref==='male'?0.8:voicePref==='female'?1.1:1.0;
-    u.volume=1.0;
-    const v=this._pickVoice(voicePref);
-    if(v)u.voice=v;
-    // v1.6.18: 覆蓋式播放 — cancel 後等一幀確實停止，避免下一句被瀏覽器略過
-    speechSynthesis.cancel();
-    setTimeout(()=>speechSynthesis.speak(u),55);
+    this._playClip(tileName).catch(()=>{}); // 缺預錄檔就不念
   }
 };
 
@@ -4560,7 +4516,6 @@ const Game={
     // Apply AI speed from lobby setting
     const lobbySpd=document.getElementById('sspeed')?.value||'normal';
     this.setSpeed(lobbySpd);
-    Snd._bestVoice=null;
     this.winStats=[0,0,0,0];this.rounds=0;
     this.riichiMode=false;this.riichiTile=null;
 
@@ -6677,21 +6632,7 @@ const Game={
 
   // ── 麻將語音廣播共用工具 ─────────────────────────────────
   _speakMj(text){
-    Snd._playClip(text,.5).catch(()=>this._speakMjTTS(text));
-  },
-  _speakMjTTS(text){
-    if(!window.speechSynthesis)return;
-    const u=new SpeechSynthesisUtterance(text);
-    u.lang='zh-TW';u.rate=1.05;u.pitch=1.0;u.volume=0.5;
-    const voices=speechSynthesis.getVoices();
-    u.voice=voices.find(v=>(v.lang==='zh-TW'||v.lang==='zh-HK')&&
-      (v.name.includes('Google')||v.name.includes('Yating')||v.name.includes('Hanhan')||v.name.includes('Natural')))
-      ||voices.find(v=>v.lang==='zh-TW')
-      ||voices.find(v=>v.lang.startsWith('zh'))
-      ||null;
-    // v1.6.18: 覆蓋式播放
-    speechSynthesis.cancel();
-    setTimeout(()=>speechSynthesis.speak(u),55);
+    Snd._playClip(text,.5).catch(()=>{}); // 缺預錄檔就不念
   },
   // 播報用座位（莊家 = 東家），各台依自己視角的 p / dealer 計算，結果一致；語音可預錄
   _seatName(p){
@@ -7974,30 +7915,7 @@ const Game={
     }
   },
   _sayChatTTS(text){
-    if(!window.speechSynthesis)return;
-    const u=new SpeechSynthesisUtterance(text);
-    u.lang='zh-TW';
-    u.rate=0.85;  // 稍慢，聊天語音清晰
-    u.pitch=1.4;  // 偏高音調，明顯區別遊戲語音
-    u.volume=1.0;
-    // 使用與遊戲語音相反性別（讓兩者聲音不同）
-    const voicePref=Game?.settings?.voice||'auto';
-    const chatGender=voicePref==='male'?'female':'male';
-    // 獨立快取，不干擾遊戲語音選擇
-    if(!this._chatVoice){
-      const voices=speechSynthesis.getVoices();
-      const zh=voices.filter(v=>v.lang==='zh-TW'||v.lang==='zh-HK'||v.lang.startsWith('zh'));
-      if(chatGender==='female'){
-        const femHints=/mei|meijia|美佳|tingting|曉雨|yating|雅婷|sin-ji|美嘉|Kyoko|Google 國語|Google 中文|female/i;
-        this._chatVoice=zh.find(v=>femHints.test(v.name))||zh[0]||null;
-      } else {
-        const malHints=/male|雄|kun|zhang|wei|guangliang|慶龍|zhiyu|男|man/i;
-        this._chatVoice=zh.find(v=>malHints.test(v.name))||zh[1]||zh[0]||null;
-      }
-    }
-    if(this._chatVoice) u.voice=this._chatVoice;
-    speechSynthesis.cancel();
-    setTimeout(()=>speechSynthesis.speak(u),55);
+    try{ Snd.say(text); }catch(e){} // 只播預錄檔；後段 Game._sayChatTTS 亦同
   },
   _addChatMsg(type,from,text){
     const msgs=document.getElementById('chat-msgs');
@@ -8187,7 +8105,7 @@ const Game={
   returnLobby(keepSave=false){
     // 大廳（arcade）：先交給平台處理離開（取消確認則牌局原封不動）；確認離開時才照原語意放棄存檔、停語音；平台不可用才走原流程
     if(document.documentElement.classList.contains('in-arcade')){
-      try{ parent.MJLeave(()=>{ if(!keepSave)this.clearSave(); speechSynthesis&&speechSynthesis.cancel(); }); return; }catch(e){}
+      try{ parent.MJLeave(()=>{ if(!keepSave)this.clearSave(); }); return; }catch(e){}
     }
     clearTimeout(this._showWinDefer);this._winFxUntil=0; // 演出中回大廳：取消延後的結算畫面
     document.getElementById('wov').style.display='none';
@@ -8208,7 +8126,6 @@ const Game={
     document.getElementById('hud-center-pill')?.classList.remove('mdice-dim');
     const lobbyEl=document.getElementById('lobby');
     if(lobbyEl) lobbyEl.style.display='flex';
-    speechSynthesis&&speechSynthesis.cancel();
     Bgm.stop();
     if(!keepSave)this.clearSave();
     // 清除 3D 場景
@@ -10600,7 +10517,7 @@ if (Game) {
     }
   };
 
-  // 喊話：快捷喊話（預錄語音）＋自訂 6 字內（無預錄檔時退回瀏覽器語音）
+  // 喊話：快捷喊話（預錄語音）＋自訂 6 字內（無預錄檔時不出聲）
   //   原本的「🎤 切換 3 字輸入列」改為輸入列旁的 📢，CHAT_PHRASES 需與 tools/gen_voice.py PHRASES 同步
   const CHAT_PHRASES = ['快一點啦', '好牌', '謝謝', '厲害', '不好意思', '等我一下', '再來一局', '哈哈'];
   Game._shout = function(text) {
@@ -10621,7 +10538,7 @@ if (Game) {
     const inp = document.getElementById('chat-input');
     if (inp && this._shout(inp.value)) inp.value = '';
   };
-  // 念出聊天文字：走遊戲語音同一套（預錄 HsiaoChen → 缺檔退回瀏覽器語音），靜音／關語音時不念
+  // 念出聊天文字：走遊戲語音同一套（只播預錄 HsiaoChen，缺檔不出聲），靜音／關語音時不念
   Game._sayChatTTS = function(text) { try { Snd.say(text); } catch(e) {} };
   (function buildPhrases() {
     const box = document.getElementById('chat-phrases');

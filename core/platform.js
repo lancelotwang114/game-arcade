@@ -180,12 +180,15 @@ function renderLobby() {
         <button class="gc-go" aria-label="單機遊玩 ${g.name}">單機</button>
         ${g.online ? `<button class="gc-online" aria-label="連線遊玩 ${g.name}"><span aria-hidden="true">🌐</span> 連線</button>` : ''}
         ${g.settings ? `<button class="gc-cfg" aria-label="${g.name} 設定"><span aria-hidden="true">⚙</span></button>` : ''}
+        ${g.extra ? `<button class="gc-cfg gc-extra" aria-label="${g.name} ${g.extra.label}" title="${g.extra.label}"><span aria-hidden="true">${g.extra.icon}</span></button>` : ''}
       </div>`;
     card.querySelector('.gc-go').onclick = () => Platform.confirmDisband(() => Platform.launch(g.id));
     const ob = card.querySelector('.gc-online');
     if (ob) ob.onclick = () => Platform.launchOnline(g.id);
-    const cb = card.querySelector('.gc-cfg');
+    const cb = card.querySelector('.gc-cfg:not(.gc-extra)');
     if (cb) cb.onclick = () => Platform.editCfg(g.id);
+    const xb = card.querySelector('.gc-extra'); // 遊戲自訂的額外入口（例：麻將戰績）
+    if (xb) xb.onclick = () => Platform.confirmDisband(g.extra.run);
     grid.appendChild(card);
   });
   renderRoomBar();

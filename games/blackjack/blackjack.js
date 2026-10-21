@@ -254,6 +254,9 @@ if (typeof module !== 'undefined') module.exports = Blackjack;
 
 // ---------- 平台註冊 + 連線（host 權威）+ UI ----------
 if (typeof Platform !== 'undefined') {
+  // 語音：牌局紀錄對到哪個預錄固定句就念哪句（順序有差：先比長的）；句子清單見 tools/gen_voice.py
+  const BJ_VOICE = [[/保險沒收/, '保險沒收'], [/Blackjack/, 'Blackjack！'], [/爆了/, '爆了'], [/過五關/, '過五關'], [/要買保險/, '要買保險嗎'], [/買保險/, '買保險'],
+    [/請下注/, '請下注'], [/下注/, '下注'], [/牌靴重洗/, '洗牌'], [/要牌/, '要牌'], [/停/, '停牌'], [/加倍/, '加倍'], [/分牌/, '分牌']];
   const B = Blackjack;
   const esc = t => String(t).replace(/[<>&"']/g, c => `&#${c.charCodeAt(0)};`);
   const ini = nm => { const ch = [...(nm || '?')]; const last = ch[ch.length - 1]; return /[一-鿿]/.test(last) ? last : ch[0].toUpperCase(); };
@@ -443,7 +446,7 @@ if (typeof Platform !== 'undefined') {
           : [{ label: '再來一場', primary: true, onClick: c => { c(); this.restart(); } }, { label: '回大廳', onClick: c => { c(); Platform.leave(); } }] });
     }
     // 語音報牌：新的一筆紀錄就唸出來（要牌／爆了／停牌／加倍／分牌／莊家…），去掉表情符號
-    if (P && s.logN > (P.logN || 0) && s.log[0]) Platform.voice.say(s.log[0].replace(/[\u{1F000}-\u{1FAFF}☀-➿]️?/gu, '').trim());
+    if (P && s.logN > (P.logN || 0) && s.log[0]) { const v = BJ_VOICE.find(([re]) => re.test(s.log[0])); if (v) Platform.voice.say(v[1]); } // 只念預錄的固定句（名字、金額不念）
     this._prev = { round: s.roundNo, phase: s.phase, turn: s.turn, hand: s.hand, hole: s.holeShown, logN: s.logN || 0, bets: pl.map(p => p.hands.length ? p.hands.reduce((a, h) => a + h.bet, 0) : p.bet) };
     Platform.hud.sync();
     this._push();

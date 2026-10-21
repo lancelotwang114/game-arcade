@@ -24,6 +24,8 @@ Platform.register({
     // 牌背：麻將首頁的牌背選擇器在大廳看不到，搬來這裡（0 = 沿用上次選的；其餘對應 TILE_BACKS 的 id）
     { k: 'back', label: '牌背', def: 0, options: [...Array(15).keys()], fmt: v => v ? MJ_TILE_BACKS[v - 1][1] : '沿用上次' },
   ],
+  // 大廳卡片的 📊：開麻將自己的首頁（戰績、牌背、單機對戰都在那）
+  extra: { icon: '📊', label: '戰績', run: () => Platform.launch('mahjong', { home: true }) },
   _frame: null,
   _backParam(opts) { const b = !opts.join && this.target.back; return b ? `&tileback=${MJ_TILE_BACKS[b - 1][0]}` : ''; }, // 賓客不套（target 可能是房主送來的設定），牌背是個人偏好
   mount(stage, opts = {}) {
@@ -32,7 +34,8 @@ Platform.register({
     if (opts.online) {
       src += (opts.join ? `?room=${encodeURIComponent(opts.join.room)}&host=${encodeURIComponent(opts.join.host)}` : '?online=1') + '&arcade=1' + this._backParam(opts);
       this._bridge(opts);
-    } else { // 單機：跳過麻將自己的首頁直接開局
+    } else if (opts.home) src += '?arcade=1'; // 📊 首頁：帶 arcade 讓麻將不顯示「繼續上局」列（連線存檔在大廳接不回去；單機續玩由開局時詢問）
+    else { // 單機：跳過麻將自己的首頁直接開局
       const c = this.target;
       src += `?solo=1&base=${c.base}&tai=${c.tai}&money=${c.money}&time=${c.time}&speed=${['slow', 'normal', 'fast', 'turbo'][c.speed]}&quick=${c.quick}&rounds=${c.rounds === 8 ? 'south' : 'east'}` + this._backParam(opts);
     }
@@ -74,6 +77,6 @@ Platform.register({
   },
   unmount() {
     window.MJBridge = null; window.MJLeave = window.MJResume = null;
-    if (this._frame) { try { const w = this._frame.contentWindow; w.__arcadeLeaving = true; w.speechSynthesis && w.speechSynthesis.cancel(); } catch (e) {} this._frame.src = 'about:blank'; this._frame.remove(); this._frame = null; }
+    if (this._frame) { try { this._frame.contentWindow.__arcadeLeaving = true; } catch (e) {} this._frame.src = 'about:blank'; this._frame.remove(); this._frame = null; }
   },
 });

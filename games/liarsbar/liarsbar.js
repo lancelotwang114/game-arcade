@@ -622,7 +622,7 @@ if (typeof Platform !== 'undefined') {
         U.bub.forEach(b => { if (!b.classList.contains('liar')) b.className = 'lb-bub'; });
         for (let j = 0; j < dec; j++) { this._fly(k ? U.ava[k] : U.hand, U.pile, backHTML('', '--w:44px'), 380, j * 160); this.sfx.play(k ? 'place' : 'shove', { gain: .7, when: j * .16 }); }
         this._pileAdd(dec, 380);
-        this._say(k, `${dec} 張 ${faceOf(s.tableRank)}`); Platform.voice.say(`${dec} 張 ${faceOf(s.tableRank)}`);
+        this._say(k, `${dec} 張 ${faceOf(s.tableRank)}`); Platform.voice.say(`${'一兩三'[dec - 1] || dec}張 ${faceOf(s.tableRank)}`);
         if (this._3d && k) this._3d.act(k, 'play');
         U.claim.textContent = `「這 ${dec} 張，都是 ${faceOf(s.tableRank)}」— ${pl[by].name}`;
         t = 380 + dec * 160;
@@ -648,7 +648,7 @@ if (typeof Platform !== 'undefined') {
         const sh = s._shot, i = sh.seat;
         this._pend = { seat: i, fired: sh.fired, until: Date.now() + ROULETTE_OUT + 50 };
         paintSeat(i);
-        const reveal = () => { this._pend = null; paintSeat(i); this._paintLog(); Platform.voice.say(`${pl[i].name}${sh.hit ? ' 中彈' : ' 空膛'}`); };
+        const reveal = () => { this._pend = null; paintSeat(i); this._paintLog(); Platform.voice.say(sh.hit ? '中彈' : '空膛'); };
         if (this._3d) this._shot3d(pos(i), sh.hit, reveal, pl[i].name); else this._roulette(pos(i), pl[i].name, sh.fired - 1, sh.hit, reveal);
       }
     }
