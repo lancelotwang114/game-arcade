@@ -37,6 +37,13 @@ body {
 .game-card { background: linear-gradient(160deg, var(--bg2), var(--felt-d)); border: 1px solid var(--line);
   border-radius: 18px; padding: 28px 20px; color: var(--ink); text-align: center;
   transition: transform .18s, box-shadow .18s, border-color .18s; font-family: inherit; }
+/* 大廳 3D 背景（core/lobby3d.js）：鋪滿在大廳後面；載入成功才加 body.bg3d，卡片改半透明玻璃 */
+#lobby-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#lobby-bg canvas { display: block; width: 100%; height: 100%; }
+#lobby { position: relative; z-index: 1; }
+.bg3d #lobby { background: radial-gradient(ellipse 70% 60% at 50% 45%, rgba(0,0,0,.05), rgba(0,0,0,.55)); }
+.bg3d .game-card { background: rgba(10,18,14,.42); backdrop-filter: blur(10px) saturate(1.2); -webkit-backdrop-filter: blur(10px) saturate(1.2); border-color: rgba(231,196,110,.28); }
+.bg3d .lobby-title { text-shadow: 0 4px 30px rgba(0,0,0,.6); }
 .game-card:hover { transform: translateY(-6px); border-color: var(--gold); box-shadow: 0 12px 30px rgba(0,0,0,.45), 0 0 0 1px var(--gold) inset; }
 .gc-icon { font-size: 56px; line-height: 1; margin-bottom: 14px; }
 .gc-name { font-size: 22px; font-weight: 700; margin-bottom: 8px; }

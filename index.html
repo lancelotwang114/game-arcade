@@ -16,6 +16,7 @@
 </head>
 <body>
 
+<div id="lobby-bg" aria-hidden="true"></div>
 <div id="lobby">
   <div class="lobby-title">牌桌遊戲廳</div>
   <div class="lobby-sub">TABLE&nbsp;ARCADE</div>
@@ -46,5 +47,12 @@
 <script src="games/bigtwo/bigtwo.js"></script>
 <script src="games/liarsdice/liarsdice.js"></script>
 <script src="games/blackjack/blackjack.js"></script>
+
+<!-- 大廳 3D 背景：three.js 走 CDN，載入失敗就維持原本的素色大廳 -->
+<script type="module">
+const lobby = document.getElementById('lobby'), bg = document.getElementById('lobby-bg');
+import('./core/lobby3d.js').then(m => { m.mount(bg, { active: () => lobby.style.display !== 'none' }); document.body.classList.add('bg3d'); })
+  .catch(e => { console.warn('3D 大廳背景未載入', e); bg.remove(); });
+</script>
 </body>
 </html>
