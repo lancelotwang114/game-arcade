@@ -104,11 +104,11 @@ body {
 
 /* ---------- 連線開房面板（共用） ---------- */
 .net-room { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-  background: linear-gradient(160deg, var(--bg2), var(--felt-d)); border: 1px solid var(--gold);
-  border-radius: 18px; padding: 28px 34px; min-width: 360px; max-width: 92vw; text-align: center; }
-.net-room h2 { margin: 0 0 18px; color: var(--gold2); }
+  background: var(--panel, linear-gradient(160deg, var(--bg2), var(--felt-d))); border: 1px solid var(--accent, var(--gold)); /* 跟著遊戲主題色（--panel / --accent 由各遊戲定義） */
+  border-radius: 18px; padding: 28px 34px; color: var(--ink); min-width: 360px; max-width: 92vw; text-align: center; }
+.net-room h2 { margin: 0 0 18px; color: var(--accent, var(--gold2)); }
 .net-code { font-size: 18px; margin-bottom: 14px; }
-.net-code b { color: var(--gold2); letter-spacing: .15em; font-size: 22px; }
+.net-code b { color: var(--accent, var(--gold2)); letter-spacing: .15em; font-size: 22px; }
 .net-url { display: flex; gap: 8px; margin-bottom: 16px; }
 .net-url input { flex: 1; background: rgba(0,0,0,.4); border: 1px solid var(--line); color: var(--muted);
   border-radius: 8px; padding: 8px 10px; font-size: 12px; }

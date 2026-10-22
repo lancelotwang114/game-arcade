@@ -408,6 +408,8 @@
 </style>
 <style>
 *, *::before, *::after { box-sizing: border-box; }
+/* 大廳（arcade）：--gold / --gold2 原本被引用卻未定義，補上原寫死的值 */
+:root { --gold: #d4a843; --gold2: #f5cc6a; }
 html, body { margin:0; padding:0; height:100%; overflow:hidden;
              background:#0a0604;
              font-family:"Noto Sans TC", system-ui, sans-serif; color:#f3e8c8; user-select:none; }
@@ -605,9 +607,10 @@ html.in-arcade #lobby-home .mode-hero-btn.online { display: none; }
 
 /* 右上工具 */
 .tools { position:absolute; right:14px; top:14px; display:flex; gap:8px; align-items:flex-start; }
-.tools .ic { width:36px; height:36px; border-radius:8px;
-             background:linear-gradient(180deg, rgba(28,19,10,.92) 0%, rgba(16,9,5,.92) 100%);
-             border:1px solid #5c4419; display:flex; align-items:center; justify-content:center;
+/* 大廳（arcade）：對齊共用 .hud-ic（44px、圓角 12、金色半透明框、黑底） */
+.tools .ic { width:44px; height:44px; min-width:44px; min-height:44px; border-radius:12px;
+             background:rgba(0,0,0,.45);
+             border:1px solid rgba(231,196,110,.35); display:flex; align-items:center; justify-content:center;
              color:#e5d49a; font-size:16px; cursor:pointer; backdrop-filter: blur(4px);
              position:relative; user-select:none; }
 .tools .ic:hover { color:#fff; border-color:#a07a30; }
@@ -792,11 +795,11 @@ html.in-arcade #lobby-home .mode-hero-btn.online { display: none; }
 .ccp-deck  { font-size:calc(30px*min(var(--hudk,1),1.6)); }
 .ccp-label { font-size:calc(10px*min(var(--hudk,1),1.6)); }
 .tools { gap:calc(8px*var(--hudt,1)); }
-.tools .ic { width:calc(36px*var(--hudt,1)); height:calc(36px*var(--hudt,1)); font-size:calc(16px*var(--hudt,1)); border-radius:calc(8px*var(--hudt,1)); }
+.tools .ic { width:calc(44px*var(--hudt,1)); height:calc(44px*var(--hudt,1)); min-width:calc(44px*var(--hudt,1)); min-height:calc(44px*var(--hudt,1)); font-size:calc(16px*var(--hudt,1)); border-radius:calc(12px*var(--hudt,1)); } /* 大廳（arcade）：36→44、圓角 8→12 */
 .tools .ic.ic-wide { width:auto; min-width:calc(48px*var(--hudt,1)); font-size:calc(13px*var(--hudt,1)); }
 .tools .ic::after { font-size:calc(10px*var(--hudk,1)); }
 .tools .ic.on { border-color:#f5cc6a; background:linear-gradient(180deg,rgba(90,60,15,.95),rgba(50,32,8,.95)); box-shadow:0 0 12px rgba(245,200,90,.7); }
-.pause-fab, .chat-fab { font-size:calc(14px*var(--hudt,1)); padding:calc(8px*var(--hudt,1)) calc(15px*var(--hudt,1)); }
+.pause-fab, .chat-fab { font-size:calc(14px*var(--hudt,1)); padding:calc(8px*var(--hudt,1)) calc(15px*var(--hudt,1)); min-height:calc(44px*var(--hudt,1)); } /* 大廳（arcade）：觸控目標 ≥44 */
 #pause-fab-icon, .chat-fab-label { font-size:calc(14px*var(--hudt,1)); }
 #toast { font-size:calc(13px*var(--hudk,1)); }
 /* 放大後靠邊面板改以畫面邊緣為錨點，避免被切。
@@ -1461,6 +1464,10 @@ body.in-lobby .hud { visibility:hidden; }
 .t.ti { width:22px; height:30px; font-size:9px; }
 .t.back { background:linear-gradient(135deg,#b07840,#7a4818); border-color:#5c3a10; }
 .t.drawn { outline:2px solid #f5cc6a; }
+/* 大廳（arcade）：減少動態（同 core.css） */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
 </style>
 </head>
 <body>
@@ -8915,7 +8922,7 @@ function updateTbl3dScale() {
   const hud = tbl.querySelector('.hud');
   if (hud) {
     hud.style.setProperty('--hudk', Math.min(2.2, Math.max(1, 13.5 / (13 * scale))).toFixed(3));
-    hud.style.setProperty('--hudt', Math.min(2.0, Math.max(1, 40 / (36 * scale))).toFixed(3)); // 按鈕上限 2.0：再大工具列會壓到右上角副露
+    hud.style.setProperty('--hudt', Math.min(2.0, Math.max(1, 44 / (44 * scale))).toFixed(3)); // 按鈕上限 2.0：再大工具列會壓到右上角副露；大廳（arcade）：基準 36→44、目標實際 44px
   }
   _placeSidePanels(); // 面板尺寸隨縮放改變，重算避讓
   // 居中（letterbox/pillarbox 留黑邊）
@@ -10287,6 +10294,9 @@ Object.assign(window, { THREE, renderer, scene, camera, Groups, SEAT_DIST, _edge
 let _lastFrameTs = 0;
 // 大廳背景直接是 3D 牌桌：完整牌牆＋相機緩慢環繞；離開大廳時相機俯衝回牌局視角
 let _lobbyTex = null, _camFly = null, _wasLobby = false;
+// 大廳（arcade）：prefers-reduced-motion 判斷（裝飾性相機運動用）
+const _rmMQ = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+function _reduceMotion() { return !!(_rmMQ && _rmMQ.matches); }
 function _lobbyVisible() { const el = document.getElementById('lobby'); return !!el && el.style.display !== 'none'; }
 function buildLobbyScene() {
   for (const k of ['hands', 'discards', 'melds', 'flowers']) for (let i = 0; i < 4; i++) { clearGroup(Groups[k][i]); Groups[k][i] = null; }
@@ -10305,7 +10315,7 @@ function _lobbyCamera(now) {
   _wasLobby = inLobby;
   if (inLobby) {
     if (TEX['wood-back'] && _lobbyTex !== TEX['wood-back']) buildLobbyScene();
-    const a = now * 2 * Math.PI / 120000; // 120 秒繞一圈
+    const a = _reduceMotion() ? 0 : now * 2 * Math.PI / 120000; // 120 秒繞一圈；大廳（arcade）：減少動態時相機固定不繞
     camera.position.set(Math.sin(a) * 26, 17, Math.cos(a) * 26);
     camera.lookAt(0, 0, 0);
     _camFly = null;
@@ -10317,7 +10327,8 @@ function _lobbyCamera(now) {
     _camFly = { from: camera.position.clone(), t0: now };
   }
   if (_camFly) {
-    const k = Math.min(1, (now - _camFly.t0) / 1000), e = k < .5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3) / 2;
+    // 大廳（arcade）：減少動態時直接到位
+    const k = _reduceMotion() ? 1 : Math.min(1, (now - _camFly.t0) / 1000), e = k < .5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3) / 2;
     camera.position.lerpVectors(_camFly.from, new THREE.Vector3(CAMERA_CONFIG.posX, CAMERA_CONFIG.posY, CAMERA_CONFIG.posZ), e);
     camera.lookAt(CAMERA_CONFIG.lookX, CAMERA_CONFIG.lookY, CAMERA_CONFIG.lookZ);
     if (k >= 1) { _camFly = null; applyCamera(); }

@@ -578,6 +578,7 @@ if (typeof Platform !== 'undefined') {
     const ks = [...Array(N).keys()];
     root.innerHTML = `<div class="tx-app${N > 6 ? ' many' : N > 4 ? ' mid' : ''}">
       <header class="tx-top">
+        <div class="tx-brand">德州撲克</div>
         <div class="tx-info">第 <b class="tx-hno">1</b> 手<span class="tx-blinds"> · 盲注 <b>${this.SB}/${this.BB}</b></span></div>
         <button class="tx-ibtn tx-addai" aria-label="加入一位電腦玩家" hidden>＋🤖<span class="tx-lbl"> 電腦</span></button>
         <button class="tx-ibtn tx-invite" aria-label="邀請朋友中途入座" hidden>🔗<span class="tx-lbl"> 邀請</span></button>
@@ -709,7 +710,7 @@ if (typeof Platform !== 'undefined') {
       U.bub.forEach(b => { b.className = 'tx-bubble'; });
       U.hole.forEach(h => { if (h) { h.innerHTML = ''; h.classList.remove('show'); } });
       U.held.innerHTML = ''; U.held.classList.remove('folded');
-      U.seat.forEach(e => e.classList.remove('winner'));
+      U.seat.forEach(e => e.classList.remove('win'));
       U.str.className = 'tx-str'; U.str.textContent = '';
       U.potv.textContent = 0; U.potv.dataset.v = 0;
       pl.forEach((p, i) => { const el = U.st[pos(i)]; el.textContent = p.chips + p.bet; el.dataset.v = p.chips + p.bet; });
@@ -794,7 +795,8 @@ if (typeof Platform !== 'undefined') {
         payT = t + 900;
         win.forEach((i, w) => {
           for (let c = 0; c < 6; c++) this._fly(U.pot, U.ava[pos(i)], '<span class="tx-chip gold"></span>', 750, payT + c * 140 + w * 60);
-          this._fx(() => U.seat[pos(i)].classList.add('winner'), payT);
+          this._fx(() => { const el = U.seat[pos(i)]; el.classList.add('win'); // 贏家光環 + 彩帶（同大老二）
+            const r = (el.querySelector('.tx-pod') || el).getBoundingClientRect(); if (!Platform.fx.reduced()) Platform.fx.confetti(r.left + r.width / 2, r.top + r.height / 2, 40); }, payT);
         });
         for (let c = 0; c < 5; c++) this.sfx.play('chips-stack', { when: payT / 1000 + c * .15, gain: .7 });
         this.sfx.play('chips-handle', { when: payT / 1000 + .4 });
@@ -893,14 +895,14 @@ if (typeof Platform !== 'undefined') {
       const root = document.createElement('div');
       root.id = 'tx-root'; root.className = 'tx-root';
       stage.appendChild(root);
-      Texas._root = root; Texas._human = '你'; Texas._overShown = false; Texas._prev = null; Texas._tl = Platform.fx.timeline(root);
+      Texas._root = root; Texas._human = Platform.myName(); Texas._overShown = false; Texas._prev = null; Texas._tl = Platform.fx.timeline(root);
       // 進入遊戲的點擊就是使用者手勢：此時解鎖音效（iOS/Android 必要），並預載音檔
       Texas.sfx.unlock(); Texas.sfx.load();
       root.addEventListener('pointerdown', () => Texas.sfx.unlock(), { passive: true });
       const unpeek = () => Texas._ui && Texas._ui.held.classList.remove('peek');
       root.addEventListener('pointerup', unpeek); root.addEventListener('pointercancel', unpeek);
       if (opts && opts.online) { Texas._startOnline(opts); }
-      else { Texas.O = null; Texas.newMatch('你'); }
+      else { Texas.O = null; Texas.newMatch(Platform.myName()); }
     },
     unmount() { Platform.hud.unmount(); Texas._clearTimers(); Texas._clearFx(); Texas._root = null; Texas._ui = null; Texas.st = null; Texas.O = null; Texas._overShown = false; },
   });

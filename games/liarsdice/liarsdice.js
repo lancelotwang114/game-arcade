@@ -237,7 +237,7 @@ if (typeof Platform !== 'undefined') {
     }).catch(e => { Platform.toast('連線失敗：' + (e.message || e)); Platform.exit(); });
   };
   L._renderRoom = function () { if (!this._root || !this.O || this.O.started) return; Platform.net.renderRoom(this._root, this.O, '🎲 吹牛骰子', () => this._hostStart()); };
-  L.restart = function () { this._clearTimers(); this._overShown = false; this._prev = null; if (this.O && this.O.isHost) { this._hostStart(); return; } this.newMatch('你'); };
+  L.restart = function () { this._clearTimers(); this._overShown = false; this._prev = null; if (this.O && this.O.isHost) { this._hostStart(); return; } this.newMatch(Platform.myName()); };
 
   // ---------- 骨架 ----------
   L._build = function () {
@@ -320,6 +320,7 @@ if (typeof Platform !== 'undefined') {
       el.querySelector('.ld-ava').textContent = ini(p.name); el.querySelector('.ld-nm').textContent = p.name;
       if (!pend) { el.querySelector('.ld-cylw').innerHTML = cyl(p.gun.fired); el.classList.toggle('dead', !p.alive); }
       el.classList.toggle('turn', s.phase === 'bid' && s.turn === i);
+      el.classList.toggle('win', s.phase === 'over' && p.alive); // 最後存活者金色光環
     });
     if (newRound) {
       tl.clear(); sfx.ambience(true); U.tally.textContent = ''; U.tally.className = 'ld-tally'; U.rl.classList.remove('on'); U.rl.setAttribute('aria-hidden', 'true');
@@ -374,6 +375,7 @@ if (typeof Platform !== 'undefined') {
       this._overShown = true;
       const w = pl.find(p => p.alive) || pl[0], iWin = w.id === me, isGuest = O && !O.isHost;
       iWin ? Platform.audio.win() : Platform.audio.lose(); if (iWin) sfx.play('toast', { gain: .6 });
+      if (w.alive && !Platform.fx.reduced()) { const r = U.seat[pos(w.id)].querySelector('.ld-tag').getBoundingClientRect(); Platform.fx.confetti(r.left + r.width / 2, r.top + r.height / 2, 40); } // 贏家彩帶（結算視窗之前）
       this._overModal = Platform.ui.modal({ title: iWin ? '🏆 你活到最後！' : '遊戲結束',
         html: `最後存活：<b>${w.name.replace(/[<>&"']/g, '')}</b>`,
         buttons: isGuest ? [{ label: '回大廳', primary: true, onClick: c => { c(); Platform.leave(); } }]
@@ -425,7 +427,7 @@ if (typeof Platform !== 'undefined') {
       L._root = root; L._prev = null; L._overShown = false; L._tl = Platform.fx.timeline(root);
       L.sfx.unlock(); L.sfx.load().then(() => { if (L._root && L.st) L.sfx.ambience(true); });
       root.addEventListener('pointerdown', () => L.sfx.unlock(), { passive: true });
-      if (opts && opts.online) L._startOnline(opts); else { L.O = null; L.newMatch('你'); }
+      if (opts && opts.online) L._startOnline(opts); else { L.O = null; L.newMatch(Platform.myName()); }
     },
     unmount() {
       Platform.hud.unmount(); L._clearTimers(); if (L._tl) L._tl.clear(); L.sfx.ambience(false);

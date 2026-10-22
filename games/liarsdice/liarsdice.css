@@ -2,10 +2,11 @@
 .ld-root {
   position: fixed; inset: 0; overflow: hidden;
   --ink: #f3e6cc; --muted: #c4ad87; --accent: #f0b54a; --accent-ink: #2a1803; --danger: #c8372d; --ok: #6be38f;
+  --bg: #0b0705; --primary: linear-gradient(180deg, #f8cf7a, #e0992e); --danger-g: linear-gradient(180deg, #dc4a3e, #a82a21); --glow: rgba(240,181,74,.6);
   --panel: rgba(28,18,10,.92); --line: rgba(240,181,74,.35); --die: #fbf3e0; --pip: #2a1a0c;
   --cup: linear-gradient(90deg, #4a2a14, #8a5428 45%, #5a3218); --cup-rim: #2a170a;
   --title: 'Rye', 'Noto Serif TC', serif; --o: 'Oswald', 'Noto Sans TC', system-ui, sans-serif;
-  background: radial-gradient(70% 60% at 50% 30%, #3a2716, #1b120a 55%, #0b0705); background-color: #0b0705;
+  background: radial-gradient(70% 60% at 50% 30%, #3a2716, #1b120a 55%, #0b0705); background-color: var(--bg);
   color: var(--ink); font-family: 'Noto Sans TC', system-ui, sans-serif;
 }
 .ld-app { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
@@ -16,7 +17,7 @@
 
 /* 頂列：左側留給平台「← 回大廳」 */
 .ld-top { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px 140px; min-height: 68px; position: relative; z-index: 20; }
-.ld-brand { font: 400 22px var(--title); letter-spacing: .06em; color: var(--accent); white-space: nowrap; }
+.ld-brand { font: 400 22px var(--title); letter-spacing: .1em; color: var(--accent); white-space: nowrap; }
 .ld-info { flex: 1; text-align: center; font-size: 13px; color: var(--muted); }
 .ld-wild { display: inline-block; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--accent); color: var(--accent); font-size: 12px; margin-left: 6px; }
 .ld-wild.off { border-color: var(--muted); color: var(--muted); text-decoration: line-through; }
@@ -58,10 +59,15 @@
 .ld-seat[data-p="1"] { right: 8%; top: 34%; } .ld-seat[data-p="3"] { left: 8%; top: 34%; }
 .ld-seat[data-p="0"] { left: 50%; bottom: 2%; translate: -50% 0; }
 .ld-tag { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); max-width: 46vw; }
-.ld-ava { width: 36px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-weight: 900; background: rgba(255,255,255,.1); border: 2px solid var(--line); flex-shrink: 0; }
+.ld-ava { position: relative; width: 46px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-weight: 900; background: rgba(255,255,255,.1); border: 2px solid var(--line); flex-shrink: 0; }
 .ld-nm { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9em; }
 .ld-cyl { display: flex; gap: 3px; } .ld-cyl i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); } .ld-cyl i.fired { background: var(--muted); opacity: .5; }
-.ld-seat.turn .ld-tag { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 22px var(--accent); }
+.ld-seat.turn .ld-tag { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 26px var(--glow); }
+.ld-seat.turn .ld-ava { border-color: var(--accent); animation: ldBreath 1.3s ease-in-out infinite; }
+@keyframes ldBreath { 50% { box-shadow: 0 0 18px var(--glow); } }
+/* 贏家座位金色光環 */
+.ld-seat.win .ld-tag { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 36px var(--glow), 0 0 70px var(--glow); }
+.ld-seat.win .ld-ava { border-color: var(--accent); }
 .ld-seat.dead .ld-tag { opacity: .35; filter: grayscale(1); }
 .ld-bub { position: absolute; z-index: 6; top: -8px; left: 50%; translate: -50% -100%; white-space: nowrap; font: 700 15px 'Noto Sans TC'; padding: 5px 14px; border-radius: 99px; background: var(--ink); color: #111; opacity: 0; pointer-events: none; }
 .ld-seat[data-p="0"] .ld-bub { top: auto; bottom: 8px; left: calc(100% + 10px); translate: 0 0; }
@@ -94,9 +100,9 @@
 .ld-fbtn.sel { border-color: var(--accent); background: rgba(240,181,74,.22); }
 .ld-app button:disabled { opacity: .3; cursor: default; }
 .ld-acts { display: flex; flex-direction: column; gap: 8px; min-width: 160px; }
-.ld-act { min-height: 52px; min-width: 64px; border-radius: 14px; border: 0; font: 700 18px 'Noto Sans TC'; }
-.ld-act.bid { background: var(--accent); color: var(--accent-ink); }
-.ld-act.open { background: var(--danger); color: #fff; font-size: 22px; letter-spacing: .15em; }
+.ld-act { min-height: 50px; min-width: 64px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); font: 700 16px 'Noto Sans TC'; }
+.ld-act.bid { background: var(--primary); color: var(--accent-ink); border: 0; min-height: 56px; font-size: 18px; }
+.ld-act.open { background: var(--danger-g); color: #fff; border: 0; min-height: 56px; font-size: 22px; letter-spacing: .15em; }
 
 /* 輪盤 */
 .ld-rl { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(0,0,0,.8); opacity: 0; pointer-events: none; transition: opacity .35s; }
@@ -136,7 +142,7 @@
 /* 矮手機直拿（如 375×667） */
 @media (orientation: portrait) and (max-height: 720px) {
   .ld-top { min-height: 56px; padding-top: 6px; }
-  .ld-qbtn { min-height: 44px; } .ld-qv { font-size: 24px; } .ld-act { min-height: 48px; } .ld-tip { display: none; }
+  .ld-qbtn { min-height: 44px; } .ld-qv { font-size: 24px; } .ld-act, .ld-act.bid, .ld-act.open { min-height: 48px; } .ld-tip { display: none; }
   .ld-cur { font-size: 28px; } .ld-cur .ld-die { --s: 32px; } .ld-tally { font-size: 18px; }
 }
 /* 橫向但很矮（手機橫拿）：面板改一排、桌面扁寬 */
@@ -146,7 +152,7 @@
   .ld-panel { flex-direction: row; align-items: center; padding: 6px 8px; } .ld-qrow { flex-shrink: 0; gap: 6px; } .ld-tip { display: none; }
   .ld-frow { grid-template-columns: repeat(6, 44px); gap: 4px; } .ld-fbtn { min-height: 44px; padding: 2px; } .ld-fbtn .ld-die { --s: 28px; }
   .ld-qbtn { min-width: 44px; min-height: 44px; } .ld-qv { font-size: 24px; min-width: 1.6em; }
-  .ld-acts { flex-direction: row; min-width: 0; } .ld-act { min-height: 48px; padding: 0 12px; font-size: 16px; } .ld-act.open { font-size: 18px; }
+  .ld-acts { flex-direction: row; min-width: 0; } .ld-act, .ld-act.bid, .ld-act.open { min-height: 48px; padding: 0 12px; font-size: 16px; } .ld-ava { width: 36px; } .ld-act.open { font-size: 18px; }
   /* 座位改橫排（盅在左、名牌在右），上下各省一半高度給中央看板 */
   .ld-seat[data-p="0"], .ld-seat[data-p="2"] { flex-direction: row; gap: 8px; }
   .ld-cupwrap { height: 60px; } .ld-cup { width: 66px; height: 56px; } .ld-die { --s: 22px; }

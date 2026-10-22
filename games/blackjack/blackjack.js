@@ -342,7 +342,7 @@ if (typeof Platform !== 'undefined') {
     }).catch(e => { Platform.toast('連線失敗：' + (e.message || e)); Platform.exit(); });
   };
   B._renderRoom = function () { if (!this._root || !this.O || this.O.started) return; Platform.net.renderRoom(this._root, this.O, '♠️ 21 點', () => this._hostStart()); };
-  B.restart = function () { this._clearTimers(); this._overShown = false; this._prev = null; if (this.O && this.O.isHost) { this._hostStart(); return; } this.newMatch('你'); };
+  B.restart = function () { this._clearTimers(); this._overShown = false; this._prev = null; if (this.O && this.O.isHost) { this._hostStart(); return; } this.newMatch(Platform.myName()); };
 
   // ---------- 骨架 ----------
   B._skin = function () { const r = this._root.style, abs = u => new URL(u, document.baseURI).href;
@@ -403,7 +403,8 @@ if (typeof Platform !== 'undefined') {
     // 莊家
     const dHide = !s.holeShown;
     const dcards = this._cards('D', dHide ? s.dealerCards.map((c, j) => j === 1 ? null : c) : s.dealerCards, j => dealing ? dealDelay(nDeal - 1, j) : hitDelay());
-    U.dealer.classList.toggle('turn', s.phase === 'dealer');
+    const won = i => s.phase === 'settle' && s.lastNet && s.lastNet[i] > 0; // 結算淨贏 → 贏家光環（下一局自動清除）
+    U.dealer.classList.toggle('turn', s.phase === 'dealer'); U.dealer.classList.toggle('win', won(D));
     U.dealer.innerHTML = `<div class="bj-who"><div class="bj-ava">${esc(ini(pl[D].name))}</div><div><div class="bj-nm">${esc(pl[D].name)}<span class="bj-badge">莊</span></div><div class="bj-chips">$${pl[D].chips}${this._netHTML(D)}</div></div></div>
       <div class="bj-cards">${dcards}</div>${s.dealerCards.length && !dHide ? totHTML(s.dealerCards) : ''}<div class="bj-rule">莊家到 17 點停 · BLACKJACK 賠 3:2 · 過五關賠 2 倍</div>`;
     if (P && P.hole === false && s.holeShown && s.dealerCards.length) sfx.play('place', { gain: .7 });
@@ -420,7 +421,7 @@ if (typeof Platform !== 'undefined') {
       const betN = p.hands.length ? p.hands.reduce((a, h) => a + h.bet, 0) : p.bet, newBet = P && !newRound && betN > (P.bets[i] || 0);
       const chips = betN ? chipsOf(betN).map((v, j) => `<i class="bj-chip c${v} ${newBet ? 'in' : ''}" style="--d:${j * 50}ms"></i>`).join('') + ` ${betN}`
         : s.phase === 'bet' && this.bettors().includes(i) ? '<span class="bj-wait">下注中…</span>' : '';
-      return `<div data-i="${i}" class="bj-seat ${i === me ? 'me' : ''} ${s.phase === 'play' && s.turn === i ? 'turn' : ''} ${s.phase !== 'bet' && !p.bet ? 'out' : ''}" ${side ? `data-side="${side}"` : ''}>
+      return `<div data-i="${i}" class="bj-seat ${i === me ? 'me' : ''} ${s.phase === 'play' && s.turn === i ? 'turn' : ''} ${won(i) ? 'win' : ''} ${s.phase !== 'bet' && !p.bet ? 'out' : ''}" ${side ? `data-side="${side}"` : ''}>
         <div class="bj-hands ${p.hands.length > 1 ? 'multi' : ''}">${hands}</div><div class="bj-bet">${chips}${p.insured ? '<span class="bj-ins">保險</span>' : ''}</div>
         <div class="bj-who"><div class="bj-ava">${esc(ini(p.name))}</div><div><div class="bj-nm">${esc(p.name)}</div><div class="bj-chips">$${p.chips}${this._netHTML(i)}</div></div></div></div>`;
     }).join('');
@@ -431,6 +432,8 @@ if (typeof Platform !== 'undefined') {
       if (s.phase === 'settle' && P.phase !== 'settle') {
         const n = s.lastNet ? s.lastNet[me] : 0;
         sfx.play(n > 0 ? 'stack' : 'collide', { gain: .7, when: .3 }); if (n > 0 && me !== D) sfx.play('toast', { gain: .35, when: .7 });
+        const w = n > 0 && !Platform.fx.reduced() && (me === D ? U.dealer : U.seats.querySelector(`.bj-seat[data-i="${me}"]`))?.querySelector('.bj-who'); // 自己贏：名牌處撒彩帶
+        if (w) { const r = w.getBoundingClientRect(); Platform.fx.confetti(r.left + r.width / 2, r.top + r.height / 2, 40); }
       }
     }
     this._paintDock();
@@ -516,7 +519,7 @@ if (typeof Platform !== 'undefined') {
         else if (d === 'ins' || d === 'noins') B._send('insure', { yes: d === 'ins' });
         else B._send(d);
       });
-      if (opts && opts.online) B._startOnline(opts); else { B.O = null; B.newMatch('你'); }
+      if (opts && opts.online) B._startOnline(opts); else { B.O = null; B.newMatch(Platform.myName()); }
     },
     unmount() {
       Platform.hud.unmount(); B._clearTimers();

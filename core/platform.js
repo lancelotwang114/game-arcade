@@ -130,6 +130,8 @@ const Platform = {
     ai: { k: 'AI_SPEED', label: '電腦速度', def: 1, options: [1.6, 1, 0.5], fmt: v => ({ 1.6: '慢', 1: '正常', 0.5: '快' })[v] || v },
   },
   money: v => '$' + v.toLocaleString('en-US'),
+  // 自己的顯示名稱：大廳暱稱，沒設就叫「你」
+  myName() { return this.store.get('arcade_name', '') || '你'; },
   cfg(id) { const g = this.games.find(x => x.id === id); return g ? this._clampCfg(g, this.store.get('arcade_cfg_' + id, {})) : {}; },
   applyCfg(id, cfg) { const g = this.games.find(x => x.id === id); if (g && g.target) Object.assign(g.target, this._clampCfg(g, cfg)); },
   // 設定對話框：暱稱 + 該遊戲設定；存檔後呼叫 after()

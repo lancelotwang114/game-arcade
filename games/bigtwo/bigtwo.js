@@ -646,7 +646,7 @@ if (typeof Platform !== 'undefined') {
       { k: 'UNIT', label: '每點金額', def: 10, options: [1, 5, 10, 50, 100], fmt: v => `${Platform.money(v)}/點` }, Platform.COMMON_CFG.turn, Platform.COMMON_CFG.ai],
     mount(stage, opts) {
       const root = document.createElement('div'); root.id = 'b2-root'; root.className = 'b2-root'; stage.appendChild(root);
-      B._root = root; B._human = '你'; B._prev = null; B._overShown = false; B._tl = Platform.fx.timeline(root);
+      B._root = root; B._human = Platform.myName(); B._prev = null; B._overShown = false; B._tl = Platform.fx.timeline(root);
       B.sfx.unlock(); B.sfx.load(); B.chipSfx.load();
       root.addEventListener('pointerdown', () => B.sfx.unlock(), { passive: true });
       root.addEventListener('click', e => {
@@ -656,7 +656,7 @@ if (typeof Platform !== 'undefined') {
         if (e.target === U.pass && !U.pass.disabled) B._send('pass');
       });
       B._mq = matchMedia('(orientation: portrait)'); B._onMq = () => { if (B._ui && B.st) B._paintHand(false); }; B._mq.addEventListener('change', B._onMq);
-      if (opts && opts.online) B._startOnline(opts); else { B.O = null; B.newMatch('你'); }
+      if (opts && opts.online) B._startOnline(opts); else { B.O = null; B.newMatch(Platform.myName()); }
     },
     unmount() {
       Platform.hud.unmount(); B._clearTimers(); if (B._tl) B._tl.clear(); if (B._mq) B._mq.removeEventListener('change', B._onMq);

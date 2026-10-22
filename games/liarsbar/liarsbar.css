@@ -2,11 +2,12 @@
 .lb-root {
   position: fixed; inset: 0; overflow: hidden;
   --ink: #f3e6cc; --muted: #c4ad87; --accent: #f0b54a; --accent-ink: #2a1803; --danger: #c8372d;
-  --panel: rgba(28,18,10,.9); --line: rgba(240,181,74,.35);
+  --bg: #0b0705; --primary: linear-gradient(180deg, #f8cf7a, #e0992e); --danger-g: linear-gradient(180deg, #dc4a3e, #a82a21);
+  --panel: rgba(28,18,10,.9); --line: rgba(240,181,74,.35); --glow: rgba(240,181,74,.6);
   --card: linear-gradient(160deg, #fbf3e0, #e9dcbd); --card-ink: #2a1a0c;
   --back: repeating-linear-gradient(45deg, #6a2318 0 6px, #7f2d1f 6px 12px); --back-line: #e0b064;
-  --num: 'Oswald', 'Noto Sans TC', sans-serif;
-  background: radial-gradient(70% 60% at 50% 30%, #3a2716 0%, #1b120a 55%, #0b0705 100%); background-color: #0b0705;
+  --o: 'Oswald', 'Noto Sans TC', sans-serif;
+  background: radial-gradient(70% 60% at 50% 30%, #3a2716 0%, #1b120a 55%, #0b0705 100%); background-color: var(--bg);
   color: var(--ink); font-family: 'Noto Sans TC', system-ui, sans-serif;
 }
 .lb-app { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
@@ -14,9 +15,9 @@
 
 /* 頂列：左側留給平台「← 回大廳」 */
 .lb-top { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px 140px; z-index: 30; min-height: 68px; }
-.lb-brand { font-family: 'Rye', serif; font-size: 22px; letter-spacing: .1em; color: var(--accent); text-shadow: 0 0 16px rgba(240,181,74,.4); white-space: nowrap; }
+.lb-brand { font-family: 'Rye', serif; font-size: 22px; letter-spacing: .1em; color: var(--accent); white-space: nowrap; }
 .lb-info { flex: 1; text-align: center; font-size: 13px; color: var(--muted); }
-.lb-info b { font-family: var(--num); color: var(--ink); }
+.lb-info b { font-family: var(--o); color: var(--ink); }
 .lb-ibtn { min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); font-size: 15px; }
 .lb-ibtn:focus-visible, .lb-act:focus-visible, .lb-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
@@ -37,17 +38,19 @@
 .lb-seat[data-p="1"] { right: 4%; top: 32%; }
 .lb-seat[data-p="3"] { left: 4%; top: 32%; }
 .lb-meta { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-.lb-ava { position: relative; width: 54px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 20px;
+.lb-ava { position: relative; width: 46px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 17px;
   background: radial-gradient(circle at 35% 30%, #5a4128, #22160c); border: 2px solid var(--line); }
 .lb-nm { font-weight: 700; font-size: 14px; max-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lb-cnt { font: 600 13px var(--num); color: var(--muted); }
+.lb-cnt { font: 600 13px var(--o); color: var(--muted); }
 .lb-cnt b { color: var(--accent); font-size: 16px; }
 .lb-cyl { display: flex; gap: 4px; }
 .lb-cyl i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--muted); }
 .lb-cyl i.fired { background: var(--muted); opacity: .5; }
 .lb-seat.warn .lb-cyl i, .lb-me.warn .lb-cyl i { border-color: var(--danger); }
-.lb-seat.turn .lb-ava, .lb-me.turn .lb-ava { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,255,255,.08), 0 0 26px var(--accent); animation: lbBreath 1.2s ease-in-out infinite; }
-@keyframes lbBreath { 50% { box-shadow: 0 0 0 3px rgba(255,255,255,.08), 0 0 8px var(--accent); } }
+.lb-seat.turn .lb-ava, .lb-me.turn .lb-ava { border-color: var(--accent); animation: lbBreath 1.3s ease-in-out infinite; }
+@keyframes lbBreath { 50% { box-shadow: 0 0 18px var(--glow); } }
+/* 贏家座位金色光環 */
+.lb-seat.win .lb-ava, .lb-me.win .lb-ava { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 36px var(--glow), 0 0 70px var(--glow); }
 .lb-seat.dead, .lb-me.dead { opacity: .35; filter: grayscale(1); }
 .lb-seat.dead .lb-ava::after, .lb-me.dead .lb-ava::after { content: '✕'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 40px; color: var(--danger); }
 
@@ -67,7 +70,7 @@
 /* 牌 */
 .lb-card { --w: 64px; width: var(--w); aspect-ratio: 5/7; border-radius: calc(var(--w) * .12); position: relative; flex-shrink: 0;
   background: var(--card); color: var(--card-ink); box-shadow: 0 6px 14px rgba(0,0,0,.5); display: grid; place-items: center;
-  font: 700 calc(var(--w) * .52) / 1 var(--num); transition: transform .25s, translate .25s, box-shadow .25s; }
+  font: 700 calc(var(--w) * .52) / 1 var(--o); transition: transform .25s, translate .25s, box-shadow .25s; }
 .lb-card.joker { color: var(--danger); }
 .lb-card.back, .lb-card .lb-cback { background: var(--back); border: 2px solid var(--back-line); }
 .lb-card.back > * { display: none; }
@@ -85,7 +88,7 @@
 
 /* 桌牌 / 牌堆 / 宣稱 */
 .lb-center { position: absolute; z-index: 3; left: 50%; top: 31%; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.lb-tlabel { font: 600 13px var(--num); letter-spacing: .35em; text-indent: .35em; color: var(--muted); }
+.lb-tlabel { font: 600 13px var(--o); letter-spacing: .35em; text-indent: .35em; color: var(--muted); }
 .lb-tcard { --w: 78px; }
 .lb-pile { position: relative; width: 140px; height: 76px; }
 .lb-pile .lb-card { --w: 46px; position: absolute; left: 50%; top: 50%; }
@@ -93,7 +96,12 @@
 .lb-deck { position: absolute; left: 50%; top: 40%; width: 1px; height: 1px; }
 .lb-gunrest { position: absolute; z-index: 2; left: 71%; top: 72%; width: 170px; translate: -50% -50%; rotate: -24deg; pointer-events: none; }
 .lb-gunrest svg { width: 100%; height: auto; filter: drop-shadow(0 10px 10px rgba(0,0,0,.6)); }
-.lb-log { position: absolute; z-index: 8; left: 16px; top: 4px; max-width: 230px; font-size: 13px; color: var(--muted); line-height: 1.6; pointer-events: none; }
+/* 紀錄抽屜（同大老二） */
+.lb-log { position: absolute; z-index: 35; top: 0; right: 0; bottom: 0; width: min(320px, 86vw); background: rgba(20,13,7,.97); border-left: 1px solid var(--line);
+  padding: 16px; transform: translateX(100%); transition: transform .25s; overflow: auto; }
+.lb-log.open { transform: none; }
+.lb-log h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-content: space-between; align-items: center; }
+.lb-log ul { margin: 0; padding: 0; } .lb-log li { list-style: none; font-size: 14px; color: var(--muted); padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
 
 /* 你的區 */
 .lb-dock { position: relative; z-index: 10; display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: end; padding: 0 18px calc(14px + env(safe-area-inset-bottom)); }
@@ -106,9 +114,9 @@
 .lb-hand.locked .lb-card { cursor: default; }
 .lb-dead-note { color: var(--muted); font-size: 14px; align-self: center; }
 .lb-acts { display: flex; flex-direction: column; gap: 10px; min-width: 200px; }
-.lb-act { min-height: 54px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); font: 700 17px 'Noto Sans TC', sans-serif; transition: transform .1s, opacity .2s, box-shadow .2s; }
-.lb-act.play { background: var(--accent); color: var(--accent-ink); border: 0; }
-.lb-act.liar { background: var(--danger); color: #fff; border: 0; font-size: 20px; letter-spacing: .1em; }
+.lb-act { min-height: 50px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); font: 700 16px 'Noto Sans TC', sans-serif; transition: transform .1s, opacity .2s, box-shadow .2s; }
+.lb-act.play { background: var(--primary); color: var(--accent-ink); border: 0; min-height: 56px; font-size: 18px; }
+.lb-act.liar { background: var(--danger-g); color: #fff; border: 0; min-height: 56px; font-size: 20px; letter-spacing: .1em; }
 .lb-act:disabled { opacity: .3; cursor: default; }
 .lb-act:not(:disabled):active { transform: scale(.95); }
 .lb-act.hint:not(:disabled) { animation: lbHint 1.1s ease-in-out infinite; }
@@ -154,8 +162,6 @@
   .lb-seat .lb-bub, .lb-seat[data-p="1"] .lb-bub { left: 50%; right: auto; top: auto; bottom: calc(100% + 4px); translate: -50% 0; }
   .lb-center { top: 38%; } .lb-gunrest { display: none; } /* 直向放不下；開槍演出仍會出現左輪 */
   .lb-seat[data-p="2"] { flex-direction: column; gap: 4px; } .lb-seat[data-p="2"] .lb-meta { align-items: center; }
-  .lb-log { display: none; top: 0; left: 8px; right: 8px; max-width: none; padding: 10px 12px; border-radius: 12px; background: rgba(12,8,4,.94); border: 1px solid var(--line); }
-  .lb-log.open { display: block; }
   .lb-dock { grid-template-columns: auto 1fr; grid-template-areas: "me hand" "acts acts"; gap: 8px; padding: 0 10px calc(10px + env(safe-area-inset-bottom)); }
   .lb-me { grid-area: me; } .lb-hand { grid-area: hand; min-height: 100px; }
   .lb-acts { grid-area: acts; display: grid; grid-template-columns: 1.3fr 1fr; min-width: 0; }
@@ -176,12 +182,8 @@
   .lb-center { top: 34%; }
   .lb-gunrest { display: none; }
   .lb-hand { min-height: 90px; } .lb-hand .lb-card { --w: 58px; }
-  .lb-act { min-height: 46px; } .lb-tip { display: none; }
-  .lb-log { display: none; top: 0; padding: 10px 12px; border-radius: 12px; background: rgba(12,8,4,.94); border: 1px solid var(--line); }
-  .lb-log.open { display: block; }
+  .lb-act, .lb-act.play, .lb-act.liar { min-height: 46px; } .lb-tip { display: none; }
 }
-/* 桌機以外不顯示紀錄按鈕時，紀錄常駐 */
-@media (orientation: landscape) and (min-height: 521px) { .lb-logbtn { display: none; } }
 
 /* 3D 角色模式（lb3d.js 載入成功才加 .three）：畫布鋪滿舞台當背景，2D 桌面裝飾隱藏；
    座位頭像改透明但保留位置（飛牌動畫的起點），輪到誰改亮名牌 */
@@ -190,7 +192,8 @@
 .lb-app.three .lb-stage .lb-ava { opacity: 0; }
 .lb-app.three .lb-center { top: 47%; }                                     /* 往下移到 3D 桌面上，不擋對面角色 */
 .lb-app.three .lb-seat .lb-nm { padding: 2px 10px; border-radius: 99px; background: rgba(0,0,0,.55); }
-.lb-app.three .lb-seat.turn .lb-nm { color: #1a1206; background: var(--accent); box-shadow: 0 0 16px var(--accent); }
+.lb-app.three .lb-seat.turn .lb-nm { color: #1a1206; background: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 26px var(--glow); }
+.lb-app.three .lb-seat.win .lb-nm { color: #1a1206; background: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 36px var(--glow), 0 0 70px var(--glow); }
 @media (orientation: portrait) { .lb-app.three .lb-seat[data-p="1"], .lb-app.three .lb-seat[data-p="3"] { top: 12%; } } /* 名牌移到頭頂上方，不蓋住左右兩家 */
 
 @media (prefers-reduced-motion: reduce) {

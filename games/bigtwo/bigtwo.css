@@ -16,7 +16,7 @@
 
 /* 頂列：左側留給平台「← 回大廳」 */
 .b2-top { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px 140px; min-height: 68px; position: relative; z-index: 6; }
-.b2-brand { font: 700 22px var(--o); letter-spacing: .12em; color: var(--accent); white-space: nowrap; }
+.b2-brand { font: 700 22px var(--o); letter-spacing: .1em; color: var(--accent); white-space: nowrap; }
 .b2-info { flex: 1; text-align: center; font-size: 13px; color: var(--muted); }
 .b2-info b { font-family: var(--o); color: var(--ink); }
 .b2-ibtn { min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); font-size: 15px; }

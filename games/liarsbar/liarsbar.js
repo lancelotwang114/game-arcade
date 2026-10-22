@@ -441,7 +441,6 @@ if (typeof Platform !== 'undefined') {
         </div>
         <div class="lb-gunrest">${GUN_SVG}</div>
         <div class="lb-deck"></div>
-        <div class="lb-log" aria-label="牌局紀錄"></div>
         <div class="lb-stamp" aria-hidden="true">騙子！</div>
       </main>
       <section class="lb-dock" aria-label="你的手牌與行動">
@@ -454,6 +453,7 @@ if (typeof Platform !== 'undefined') {
         <div class="lb-rl-who" aria-live="assertive"></div><div class="lb-rl-cyl"></div><div class="lb-rl-gun">${GUN_SVG}</div><div class="lb-rl-msg" aria-live="assertive"></div>
       </div></div>
       <div class="lb-flash"></div>
+      <aside class="lb-log" aria-label="牌局紀錄"><h2>牌局紀錄 <button class="lb-ibtn lb-logx" aria-label="關閉">✕</button></h2><ul></ul></aside>
     </div>`;
     const q = s => root.querySelector(s);
     const U = this._ui = {
@@ -465,7 +465,8 @@ if (typeof Platform !== 'undefined') {
     U.ava = U.seat.map(e => e.querySelector('.lb-ava')); U.bub = U.seat.map(e => e.querySelector('.lb-bub')); U.cyl = U.seat.map(e => e.querySelector('.lb-cyl'));
     this._prev = null; this._pend = null; this._handKey = ''; this._sel = new Set();
     if (this._3d) { this._3d.dispose(); this._3d = null; } this._3dp = null;
-    q('.lb-logbtn').onclick = () => U.log.classList.toggle('open');
+    const logOpen = on => { U.log.classList.toggle('open', on); U.log.inert = !on; }; logOpen(false); // 收起時不可 Tab 進去（同吹牛骰子）
+    q('.lb-logbtn').onclick = () => logOpen(!U.log.classList.contains('open')); q('.lb-logx').onclick = () => logOpen(false);
     const me = () => this.O ? this.O.mySeat : 0;
     Platform.hud.mount(this, { root, bar: q('.lb-top'), me,
       seatEl: i => { const n = this.st ? this.st.players.length : 0; return n && this._ui ? this._ui.seat[(i - me() + n) % n] : null; } });
@@ -587,6 +588,7 @@ if (typeof Platform !== 'undefined') {
       U.cyl[k].title = `已擊發 ${fired}/6`;
       U.seat[k].classList.toggle('dead', hold ? false : !p.alive);
       U.seat[k].classList.toggle('warn', fired >= 4);
+      U.seat[k].classList.toggle('win', s.phase === 'over' && p.alive && !pend); // 最後生還者金色光環（最後一槍揭曉前不亮，免得先暴露結果）
       if (k) U.seat[k].querySelector('.lb-cnt b').textContent = p.hand.length;
     };
     pl.forEach((p, i) => paintSeat(i));
@@ -704,6 +706,13 @@ if (typeof Platform !== 'undefined') {
 
     if (!pend && !(s._shot && P && !P.shot)) this._paintLog();
     if (this._3d && s.phase === 'over' && P && P.phase !== 'over') { const w = pl.findIndex(p => p.alive); if (w >= 0 && pos(w)) this._fx(() => this._3d.act(pos(w), 'cheer'), 600); }
+    if (s.phase === 'over' && P && P.phase !== 'over') { // 贏家光環＋彩帶：等最後一槍揭曉後才出（結算視窗之前）
+      const w = pl.findIndex(p => p.alive), pd = pendNow();
+      if (w >= 0) this._fx(() => {
+        const el = U.seat[pos(w)]; el.classList.add('win');
+        if (!Platform.fx.reduced()) { const r = el.getBoundingClientRect(); Platform.fx.confetti(r.left + r.width / 2, r.top + r.height / 2, 40); }
+      }, pd ? Math.max(0, pd.until - Date.now()) : 0);
+    }
     this._sync3d();
     this._prev = { round: s.roundNo, total, reveal: !!s._reveal, shot: !!s._shot, phase: s.phase };
     Platform.hud.sync();
@@ -719,7 +728,7 @@ if (typeof Platform !== 'undefined') {
   // 紀錄（純文字寫入：玩家名稱可能來自連線賓客輸入）
   LiarsBar._paintLog = function () {
     const U = this._ui; if (!U || !this.st) return;
-    U.log.replaceChildren(...this.st.log.slice(0, 5).map(l => { const d = document.createElement('div'); d.textContent = l; return d; }));
+    U.log.querySelector('ul').replaceChildren(...this.st.log.slice(0, 5).map(l => { const d = document.createElement('li'); d.textContent = l; return d; }));
   };
 
   Platform.register({
@@ -732,12 +741,12 @@ if (typeof Platform !== 'undefined') {
       const root = document.createElement('div');
       root.id = 'lb-root'; root.className = 'lb-root';
       stage.appendChild(root);
-      LiarsBar._root = root; LiarsBar._human = '你'; LiarsBar._sel = new Set(); LiarsBar._overShown = false; LiarsBar._prev = null; LiarsBar._tl = Platform.fx.timeline(root);
+      LiarsBar._root = root; LiarsBar._human = Platform.myName(); LiarsBar._sel = new Set(); LiarsBar._overShown = false; LiarsBar._prev = null; LiarsBar._tl = Platform.fx.timeline(root);
       // 進場點擊即使用者手勢：解鎖音效（iOS/Android 必要）並預載；環境音載入後才開始
       LiarsBar.sfx.unlock(); LiarsBar.sfx.load().then(() => { if (LiarsBar._root && LiarsBar.st) LiarsBar.sfx.ambience(true); });
       root.addEventListener('pointerdown', () => LiarsBar.sfx.unlock(), { passive: true });
       if (opts && opts.online) { LiarsBar._startOnline(opts); }
-      else { LiarsBar.O = null; LiarsBar.newMatch('你'); LiarsBar.render(); LiarsBar.tick(); }
+      else { LiarsBar.O = null; LiarsBar.newMatch(Platform.myName()); LiarsBar.render(); LiarsBar.tick(); }
     },
     unmount() { Platform.hud.unmount(); if (LiarsBar._3d) { LiarsBar._3d.dispose(); LiarsBar._3d = null; } LiarsBar._3dp = null; LiarsBar._clearTimers(); LiarsBar._clearFx(); LiarsBar.sfx.ambience(false); LiarsBar._root = null; LiarsBar._ui = null; LiarsBar.st = null; LiarsBar._reveal = null; LiarsBar.O = null; LiarsBar._overShown = false; },
   });
