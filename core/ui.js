@@ -17,7 +17,7 @@ Platform.ui = {
     if (key === this._tcKey && el) return;
     clearInterval(this._tcT); this._tcKey = key;
     if (!el) { el = document.createElement('div'); el.id = 'turn-clock'; el.setAttribute('role', 'timer'); (document.getElementById('stage') || document.body).appendChild(el); }
-    const end = Date.now() + sec * 1000; el.hidden = false;
+    const end = Date.now() + sec * 1000; el.hidden = false; Platform.fx.buzz(30); // 輪到你：輕震一下
     const tick = () => { const left = Math.max(0, Math.ceil((end - Date.now()) / 1000)); el.textContent = `⏱ ${left}`; el.classList.toggle('warn', left <= 5); if (!left) clearInterval(this._tcT); };
     tick(); this._tcT = setInterval(tick, 250);
   },
@@ -72,8 +72,11 @@ Platform.ui = {
 };
 
 Platform.fx = {
-  // 在 (cx,cy) 視窗座標噴彩帶
+  // 震動回饋（Android 等支援 navigator.vibrate 的瀏覽器；iPhone Safari 不支援就靜默略過）；音量彈窗可關
+  buzz(p) { if (Platform.store.get('arcade_vib', true) && navigator.vibrate) try { navigator.vibrate(p); } catch (e) {} },
+  // 在 (cx,cy) 視窗座標噴彩帶（贏牌）
   confetti(cx, cy, n = 28) {
+    this.buzz([40, 60, 40]);
     const host = document.body;
     const colors = ['#d4a843', '#e8c56a', '#3fae6b', '#c9514d', '#5b8cc9', '#fff'];
     for (let i = 0; i < n; i++) {

@@ -735,6 +735,20 @@ if (typeof Platform !== 'undefined') {
     id: 'liarsbar', name: '騙子酒吧', icon: '🍺',
     desc: '吹牛、抓謊、左輪淘汰', players: { min: 2, max: 4 },
     online: true,
+    rules: `<h3>牌與桌牌</h3><ul>
+      <li>牌庫 20 張：K、Q、A 各 6 張，Joker（★）2 張。</li>
+      <li>每局隨機指定一種桌牌（K／Q／A），存活的人各發 5 張；Joker 萬用，算桌牌。</li></ul>
+      <h3>輪到你</h3><ul>
+      <li>選 1～3 張蓋著出，宣稱「都是桌牌」——可以說真話，也可以詐唬。</li>
+      <li>或者不信上家，喊「騙子！」翻開他剛蓋的牌。</li>
+      <li>每局第一手只能出牌；手上沒牌時只能喊騙子。</li></ul>
+      <h3>翻牌判定</h3><ul>
+      <li>翻開的牌裡有任何一張不是桌牌也不是 Joker → 出牌的人說謊，由他開槍。</li>
+      <li>全部是桌牌或 Joker → 喊騙子的人喊錯，由他開槍。</li></ul>
+      <h3>俄羅斯輪盤</h3><ul>
+      <li>每人一把左輪，6 膛 1 發實彈，擊發數整場累積。</li>
+      <li>中彈就淘汰；開槍後重新發牌、換新桌牌，由開槍的人（若淘汰則下一位存活者）起手。</li>
+      <li>最後存活的人獲勝。行動逾時由電腦代打一步。</li></ul>`,
     target: LiarsBar, settings: [Platform.COMMON_CFG.turn, Platform.COMMON_CFG.ai],
     mount(stage, opts) {
       LiarsBar._stage = stage;

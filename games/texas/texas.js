@@ -608,6 +608,7 @@ if (typeof Platform !== 'undefined') {
             <div class="tx-srow"><button class="tx-btn ghost tx-rminus" aria-label="減少">−</button><input type="range" class="tx-rng" aria-label="加注金額">
               <button class="tx-btn ghost tx-rplus" aria-label="增加">＋</button><button class="tx-btn primary tx-rok">確認</button></div>
           </div>
+          <div class="tx-pre" hidden><button class="tx-btn" data-pre="cf" aria-pressed="false">過牌/蓋牌</button><button class="tx-btn" data-pre="any" aria-pressed="false">跟任何注</button></div>
           <div class="tx-acts"><button class="tx-btn fold tx-fold" disabled>蓋牌</button><button class="tx-btn primary tx-call" disabled>跟注</button><button class="tx-btn tx-raisebtn" disabled aria-expanded="false">加注</button></div>
         </div>
       </section>
@@ -622,7 +623,14 @@ if (typeof Platform !== 'undefined') {
       held: q('.tx-held'), str: q('.tx-str'), wait: q('.tx-wait'),
       raise: q('.tx-raise'), presets: q('.tx-presets'), rng: q('.tx-rng'), rval: q('.tx-rval'), rlbl: q('.tx-rlbl'), rok: q('.tx-rok'),
       fold: q('.tx-fold'), call: q('.tx-call'), raiseBtn: q('.tx-raisebtn'), log: q('.tx-log'), logList: q('.tx-log ul'),
+      acts: q('.tx-acts'), pre: q('.tx-pre'), preBtns: [...root.querySelectorAll('.tx-pre button')],
     };
+    // 預選動作：兩鈕互斥，再按一次取消
+    this._pre = null;
+    U.preBtns.forEach(b => b.onclick = () => {
+      this._pre = this._pre === b.dataset.pre ? null : b.dataset.pre;
+      U.preBtns.forEach(x => x.setAttribute('aria-pressed', String(this._pre === x.dataset.pre)));
+    });
     U.ava = U.seat.map(e => e.querySelector('.tx-ava')); U.st = U.seat.map(e => e.querySelector('.tx-st'));
     U.bub = U.seat.map(e => e.querySelector('.tx-bubble')); U.hole = U.seat.map(e => e.querySelector('.tx-hole')); // [0] 為 null（自己用 held）
     this._prev = null; this._paid = null; this._R = null; this._strLabel = '';
@@ -852,6 +860,12 @@ if (typeof Platform !== 'undefined') {
     U.addai.hidden = !isHost || pl.length >= this.MAX_SEATS || s.street === 'over';
     U.invite.hidden = !(O && O.isHost);
     U.wait.textContent = myTurn ? '輪到你' : live ? `輪到 ${pl[s.toAct].name}…` : '';
+    // ---- 預選動作：只在本街有效，換街/新一手清除；輪到你時隱藏、改顯示正常操作鈕 ----
+    const preKey = `${s.handNo}:${s.street}`;
+    if (this._preKey !== preKey) { this._preKey = preKey; this._pre = null; }
+    const canPre = !myTurn && !!mine && !mine.folded && !mine.allin && BET_STREETS.includes(s.street) && mine.hole.length > 0;
+    U.pre.hidden = !canPre; U.acts.hidden = canPre;
+    U.preBtns.forEach(b => b.setAttribute('aria-pressed', String(this._pre === b.dataset.pre)));
     if (myTurn && (!P || !P.myTurn || newHand)) {
       const L = this.legal(me);
       const send = (kind, amount) => {
@@ -866,6 +880,11 @@ if (typeof Platform !== 'undefined') {
       U.raiseBtn.onclick = () => U.raise.classList.contains('open') ? this._closeRaise() : this._openRaise(L);
       U.rok.onclick = () => send(this._R.v >= L.maxRaise ? 'allin' : 'raise', this._R.v);
       this.sfx.ding();
+      // 有預選：稍等一下照按鈕路徑送出（過牌/蓋牌：能過就過否則蓋；跟任何注：跟注或過牌）
+      const pre = this._pre; this._pre = null;
+      // 跟任何注遇到要全下才跟得起：不自動全下，留給玩家自己決定
+      if (pre === 'any' && L.toCall > 0 && L.toCall >= mine.chips) Platform.toast && Platform.toast('要全下才能跟，請自己決定');
+      else if (pre) this._after(350, () => { if (this._ui !== U || U.call.disabled) return; (pre === 'any' || L.check ? U.call : U.fold).onclick(); });
     } else if (!myTurn) {
       this._closeRaise(); [U.fold, U.call, U.raiseBtn].forEach(b => { b.disabled = true; });
       U.call.innerHTML = '跟注'; U.raiseBtn.textContent = '加注';
@@ -886,6 +905,23 @@ if (typeof Platform !== 'undefined') {
     id: 'texas', name: '德州撲克', icon: '🃏',
     desc: '德州撲克無限注，下注/加注/全下', players: { min: 2, max: 8 },
     online: true,
+    rules: `<h3>開局</h3><ul>
+      <li>2～8 人，人數、起始籌碼、大盲由房內設定；小盲 = 大盲的一半。</li>
+      <li>莊家（D）每手往下輪；莊家下一位放小盲、再下一位放大盲（兩人對戰時莊家放小盲）。</li>
+      <li>每人兩張底牌，翻牌前由大盲的下一位先行動。</li></ul>
+      <h3>下注</h3><ul>
+      <li>四輪下注：翻牌前 → 翻牌（3 張公共牌）→ 轉牌（1 張）→ 河牌（1 張）。</li>
+      <li>動作：蓋牌、過牌（沒人下注時）、跟注、加注、全下。無限注，最多可全下。</li>
+      <li>最小加注：加到「目前注額 + 上一次加注的增量」。</li>
+      <li>不足額的全下不會重開加注：已行動過的人只能跟注或蓋牌。</li>
+      <li>籌碼不夠跟注可全下；多出來的注額另成邊池，只有投入到該層的人能贏。</li>
+      <li>預選動作：還沒輪到你時可先按「過牌/蓋牌」或「跟任何注」，輪到你時自動送出（只在本輪有效）。</li>
+      <li>有行動時限時，逾時能過牌就過牌，否則蓋牌。</li></ul>
+      <h3>攤牌與結算</h3><ul>
+      <li>只剩一人沒蓋牌，直接贏得底池。</li>
+      <li>否則攤牌：底牌 + 公共牌 7 張取最佳 5 張比大小，平手均分，零頭給莊家左手第一位。</li>
+      <li>牌型：同花順 > 四條 > 葫蘆 > 同花 > 順子 > 三條 > 兩對 > 一對 > 高牌；A 可當 1 組 A2345 順子。</li>
+      <li>籌碼輸光出局，只剩一人有籌碼時遊戲結束。</li></ul>`,
     target: Texas, settings: [
       { k: 'SEATS', label: '人數', def: 4, options: [2, 3, 4, 5, 6, 7, 8], fmt: v => `${v} 人` },
       { k: 'START', label: '起始籌碼', def: 1000, options: [500, 1000, 5000, 10000], fmt: Platform.money },

@@ -192,6 +192,25 @@ const Blackjack = {
     if (total <= 16) return u >= 7 ? 'hit' : 'stand';
     return 'stand';
   },
+  // 💡 提示：標準基本策略（多副牌、莊家軟 17 停、分牌後可加倍）；只回傳此刻合法的動作
+  hint(hand, up, chips) {
+    const { total, soft } = this.value(hand.cards), u = this.cardVal(up) === 1 ? 11 : this.cardVal(up), dbl = this.canDouble(hand, chips);
+    if (this.canSplit(hand, chips)) {
+      const v = this.cardVal(hand.cards[0]); // 對子：A/8 必分，9 對 2-6/8/9，7/2/3 對 2-7，6 對 2-6，4 對 5-6；10、5 不分
+      if (v === 1 || v === 8 || (v === 9 && u !== 7 && u < 10) || ((v === 7 || v <= 3) && u <= 7) || (v === 6 && u <= 6) || (v === 4 && (u === 5 || u === 6))) return 'split';
+    }
+    if (soft) {
+      if (total >= 19) return 'stand';
+      if (total === 18) return dbl && u >= 3 && u <= 6 ? 'double' : u <= 8 ? 'stand' : 'hit';
+      const lo = { 17: 3, 16: 4, 15: 4, 14: 5, 13: 5 }[total]; // 軟牌加倍的最低莊家明牌（上限 6）
+      return dbl && lo && u >= lo && u <= 6 ? 'double' : 'hit';
+    }
+    if (total >= 17) return 'stand';
+    if (total >= 13) return u <= 6 ? 'stand' : 'hit';
+    if (total === 12) return u >= 4 && u <= 6 ? 'stand' : 'hit';
+    if (dbl && ((total === 11 && u <= 10) || (total === 10 && u <= 9) || (total === 9 && u >= 3 && u <= 6))) return 'double';
+    return 'hit';
+  },
   aiAct(i) {
     const s = this.st; if (!s || s.phase !== 'play' || s.turn !== i) return;
     const p = s.players[i]; this.act(i, this.aiDecide(p.hands[s.hand], s.dealerCards[0], p.chips - this._committed(p)));
@@ -218,6 +237,12 @@ if (typeof module !== 'undefined' && require.main === module) {
   assert.strictEqual(B.outcome(H('10s 8h'), C('10d 6c 9h')), 1, '莊爆閒贏');
   assert.strictEqual(B.outcome(H('10s 8h'), C('10d 8c')), 0, '同點和');
   assert.ok(B.canSplit(H('8s 8h'), 100) && B.canSplit(H('Ks Qh'), 100) && !B.canSplit(H('8s 8h'), 50), '分牌條件');
+  // 提示（基本策略）
+  const up = r => C(r)[0];
+  assert.strictEqual(B.hint(H('8s 8h'), up('10d'), 1000), 'split', '8 對必分');
+  assert.deepStrictEqual([B.hint(H('10s 6h'), up('10d'), 1000), B.hint(H('10s 6h'), up('6d'), 1000)], ['hit', 'stand'], '硬 16');
+  assert.deepStrictEqual([B.hint(H('6s 5h'), up('6d'), 1000), B.hint(H('6s 5h'), up('6d'), 0)], ['double', 'hit'], '11 加倍；錢不夠改要牌');
+  assert.deepStrictEqual([B.hint(H('As 7h'), up('9d'), 1000), B.hint(H('As 4h 3c'), up('2d'), 1000)], ['hit', 'stand'], '軟 18');
   // 整場電腦對打：籌碼守恆、局數正確、狀態不卡
   for (let run = 0; run < 30; run++) {
     const q = []; B._after = (ms, fn) => q.push(fn); B.render = null;
@@ -475,7 +500,8 @@ if (typeof Platform !== 'undefined') {
       key = `play${s.hand}/${p.hands.length}/${h.cards.length}/${free}`;
       html = `<div class="bj-tip">${p.hands.length > 1 ? `第 ${s.hand + 1} 手 · ` : ''}你的點數 ${this.value(h.cards).total}${h.cards.length === 4 ? ' · 再一張沒爆就過五關！' : ''}</div>
         <button class="bj-btn" data-do="hit">要牌</button><button class="bj-btn pri" data-do="stand">停牌</button>
-        <button class="bj-btn" data-do="double" ${this.canDouble(h, free) ? '' : 'disabled'}>加倍</button><button class="bj-btn" data-do="split" ${this.canSplit(h, free) ? '' : 'disabled'}>分牌</button>`;
+        <button class="bj-btn" data-do="double" ${this.canDouble(h, free) ? '' : 'disabled'}>加倍</button><button class="bj-btn" data-do="split" ${this.canSplit(h, free) ? '' : 'disabled'}>分牌</button>
+        <button class="bj-btn bj-hintbtn" data-do="hint" aria-label="提示建議動作">💡<span class="bj-lbl"> 提示</span></button>`;
     } else {
       const t = D === me && s.phase !== 'settle' && s.phase !== 'over' ? '這局你當莊，照規則自動補牌' : s.phase === 'bet' ? '等其他人下注…' : s.phase === 'deal' ? '發牌中…' : s.phase === 'insure' ? '等其他人決定保險…'
         : s.phase === 'play' ? `輪到 ${s.players[s.turn].name}` : s.phase === 'dealer' ? '莊家補牌中…' : s.phase === 'settle' ? '結算' : '';
@@ -495,11 +521,35 @@ if (typeof Platform !== 'undefined') {
     if (isHost) { if (kind === 'bet') this.setBet(me, extra.amt); else if (kind === 'insure') this.insure(me, extra.yes); else this.act(me, kind); }
     else Platform.net.sendHost('act', { kind, ...extra });
   };
+  // 💡 提示：標出建議的按鈕 2.5 秒 + 提示訊息，不代為出手
+  B._hint = function () {
+    const s = this.st, p = s.players[this._me]; if (s.phase !== 'play' || s.turn !== this._me) return;
+    const k = this.hint(p.hands[s.hand], s.dealerCards[0], p.chips - this._committed(p));
+    const b = this._ui.dock.querySelector(`[data-do="${k}"]`); if (!b) return;
+    b.classList.add('hint'); clearTimeout(this._hintT); this._hintT = setTimeout(() => b.classList.remove('hint'), 2500);
+    Platform.toast('建議：' + { hit: '要牌', stand: '停牌', double: '加倍', split: '分牌' }[k]);
+  };
 
   Platform.register({
     id: 'blackjack', name: '21 點', icon: '♠️',
     desc: '輪流當莊：要牌、加倍、分牌、保險，過五關賠 2 倍', players: { min: 2, max: 4 },
     online: true,
+    rules: `<h3>流程</h3><ul>
+      <li>2～4 人，每局輪流當莊（跳過輸光的人）；打完設定的局數，籌碼最多者勝。</li>
+      <li>6 副牌的牌靴，剩不到 1/4 重洗。A 算 1 或 11，J、Q、K 算 10。</li>
+      <li>閒家先下注（最低注～最高注，10 的倍數，不超過自己籌碼），每人發兩張；莊家一明一暗。</li>
+      <li>莊家明牌是 A：可花下注的一半買保險，莊家 Blackjack 時保險賠 2 倍，否則沒收。</li>
+      <li>莊家明牌 A 或 10 點會先偷看，有 Blackjack 直接結算。</li></ul>
+      <h3>閒家動作</h3><ul>
+      <li>要牌 / 停牌；到 21 點自動停。</li>
+      <li>加倍：只限前兩張，下注加倍、只再拿一張（分 A 後不能加倍）。</li>
+      <li>分牌：兩張同點數（10、J、Q、K 都算 10 點）可分成兩手，限一次；分 A 各只補一張。</li>
+      <li>💡 提示：依基本策略標出建議動作，不會代你出手。</li></ul>
+      <h3>莊家與結算</h3><ul>
+      <li>莊家不做決定：不到 17 點就補牌，到 17（含軟 17）就停。</li>
+      <li>閒家爆牌就輸；莊家爆牌，沒爆的閒家贏；否則比點數，同點和局。</li>
+      <li>Blackjack（非分牌後的 A + 10 點）賠 1.5 倍；過五關（5 張沒爆）賠 2 倍；莊家 Blackjack 時只有閒家 Blackjack 能打和。</li>
+      <li>籌碼在閒家與當局莊家之間結算。逾時：下注下最低注、保險不買、行動由電腦代打一步。</li></ul>`,
     target: B, settings: [ // 最低注選項都 ≤ 100 ≤ 最高注選項，兩者不會交叉
       { k: 'START', label: '起始籌碼', def: 1000, options: [500, 1000, 5000, 10000], fmt: Platform.money }, { k: 'ROUNDS', label: '局數', def: 8, options: [4, 8, 12, 20], fmt: v => `${v} 局` },
       { k: 'MIN_BET', label: '最低注', def: 10, options: [10, 50, 100], fmt: Platform.money }, { k: 'MAX_BET', label: '最高注', def: 500, options: [100, 500, 1000, 5000], fmt: Platform.money },
@@ -517,6 +567,7 @@ if (typeof Platform !== 'undefined') {
         if (d === 'clr') { B._amt = 0; B._paintDock(); }
         else if (d === 'bet') B._send('bet', { amt: B._amt });
         else if (d === 'ins' || d === 'noins') B._send('insure', { yes: d === 'ins' });
+        else if (d === 'hint') B._hint();
         else B._send(d);
       });
       if (opts && opts.online) B._startOnline(opts); else { B.O = null; B.newMatch(Platform.myName()); }

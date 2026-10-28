@@ -96,11 +96,16 @@ const LiarsDice = {
   },
   aiAct(i) {
     const s = this.st; if (!s || s.phase !== 'bid' || s.turn !== i) return;
-    const me = s.players[i], bold = { attack: .9, balanced: .45, defense: .1 }[me.style] ?? .45;
+    const a = this.suggest(i);
+    a.open ? this.challenge(i) : this.bid(i, a.q, a.f);
+  },
+  // 建議動作（不執行）：{ open: true } 或 { q, f }；只用自己的骰子與公開資訊，提示鈕也用
+  suggest(i) {
+    const s = this.st, me = s.players[i], bold = { attack: .9, balanced: .45, defense: .1 }[me.style] ?? .45;
     if (s.bid) {
       const exp = this._expect(i, s.bid.f, !s.oneCalled);
       // 叫價明顯超過期望就開（大膽的人門檻較高）
-      if (s.bid.q > exp + .6 + bold * .8 || s.bid.q >= this.totalDice()) { this.challenge(i); return; }
+      if (s.bid.q > exp + .6 + bold * .8 || s.bid.q >= this.totalDice()) return { open: true };
     }
     // 加價：從自己最多的點數挑，叫最低合法數量；偶爾吹牛多加一個
     const wildNow = !s.oneCalled;
@@ -109,9 +114,9 @@ const LiarsDice = {
     for (const { f, e } of faces) {
       let q = Math.max(minQ, s.bid ? (this.FACE_RANK[f] > this.FACE_RANK[s.bid.f] ? s.bid.q : s.bid.q + 1) : minQ);
       if (Math.random() < bold * .25) q++;
-      if (q <= maxQ && q <= Math.ceil(e + .8 + bold * .6) && this.bid(i, q, f)) return;
+      if (q <= maxQ && q <= Math.ceil(e + .8 + bold * .6) && this.isRaise({ q, f }, s.bid, minQ, maxQ)) return { q, f };
     }
-    if (s.bid) this.challenge(i); else this.bid(i, minQ, faces[0].f);
+    return s.bid ? { open: true } : { q: minQ, f: faces[0].f };
   },
 
   log(m) { this.st.log.unshift(m); if (this.st.log.length > 8) this.st.log.pop(); },
@@ -258,7 +263,7 @@ if (typeof Platform !== 'undefined') {
           <div class="ld-qrow"><button class="ld-qbtn ld-qm" aria-label="減少數量">−</button><div class="ld-qv"></div><button class="ld-qbtn ld-qp" aria-label="增加數量">＋</button><div class="ld-tip"></div></div>
           <div class="ld-frow" role="group" aria-label="點數">${[2, 3, 4, 5, 6, 1].map(f => `<button class="ld-fbtn" data-f="${f}" aria-label="${f} 點">${dieHTML(f)}</button>`).join('')}</div>
         </div>
-        <div class="ld-acts"><button class="ld-act bid" disabled>叫</button><button class="ld-act open" disabled>開！</button></div>
+        <div class="ld-acts"><button class="ld-act hintb" hidden>💡 提示</button><button class="ld-act bid" disabled>叫</button><button class="ld-act open" disabled>開！</button></div>
       </section>
       <div class="ld-stamp" aria-hidden="true">開！</div>
       <div class="ld-rl" aria-hidden="true" aria-live="polite"><div class="ld-rlbox"><div class="ld-rlwho"></div><div class="ld-rlcyl"></div><div class="ld-rlmsg"></div></div></div>
@@ -269,7 +274,7 @@ if (typeof Platform !== 'undefined') {
     const U = this._ui = {
       app: q('.ld-app'), rinfo: q('.ld-rinfo'), wild: q('.ld-wild'), cur: q('.ld-cur'), curby: q('.ld-curby'), tally: q('.ld-tally'), stamp: q('.ld-stamp'),
       seat: [0, 1, 2, 3].map(p => q(`.ld-seat[data-p="${p}"]`)), qv: q('.ld-qv'), qm: q('.ld-qm'), qp: q('.ld-qp'), tip: q('.ld-tip'),
-      fbtn: [...root.querySelectorAll('.ld-fbtn')], bid: q('.ld-act.bid'), open: q('.ld-act.open'),
+      fbtn: [...root.querySelectorAll('.ld-fbtn')], bid: q('.ld-act.bid'), open: q('.ld-act.open'), hint: q('.ld-act.hintb'),
       rl: q('.ld-rl'), rlWho: q('.ld-rlwho'), rlCyl: q('.ld-rlcyl'), rlMsg: q('.ld-rlmsg'), flash: q('.ld-flash'), log: q('.ld-log'), logList: q('.ld-log ul'),
     };
     U.cup = U.seat.map(e => e.querySelector('.ld-cup')); U.dice = U.seat.map(e => e.querySelector('.ld-dice')); U.bub = U.seat.map(e => e.querySelector('.ld-bub'));
@@ -278,7 +283,7 @@ if (typeof Platform !== 'undefined') {
     q('.ld-logbtn').onclick = () => logOpen(true); q('.ld-logx').onclick = () => logOpen(false);
     U.qm.onclick = () => { this._q--; this._paintPanel(); }; U.qp.onclick = () => { this._q++; this._paintPanel(); };
     U.fbtn.forEach(b => b.onclick = () => { this._f = +b.dataset.f; this.sfx.play('grab', { gain: .25, rate: 1.3 }); this._paintPanel(); });
-    U.bid.onclick = () => this._send('bid'); U.open.onclick = () => this._send('open');
+    U.bid.onclick = () => this._send('bid'); U.open.onclick = () => this._send('open'); U.hint.onclick = () => this._hint();
     Platform.hud.mount(this, { root, bar: q('.ld-top'), me: () => this.O ? this.O.mySeat : 0,
       seatEl: i => this._ui ? this._ui.seat[(i - (this.O ? this.O.mySeat : 0) + 4) % 4] : null });
   };
@@ -298,8 +303,18 @@ if (typeof Platform !== 'undefined') {
       b.disabled = !(my && this.isRaise({ q: this._q, f }, s.bid, min, max)); });
     const ok = my && this.isRaise({ q: this._q, f: this._f }, s.bid, min, max);
     U.bid.disabled = !ok; U.bid.textContent = ok ? `叫 ${this._q} 個 ${this._f}` : '叫';
+    U.hint.hidden = !my; // 提示鈕：輪到自己才出現
     U.open.disabled = !(my && s.bid); U.qm.disabled = !my || this._q <= min; U.qp.disabled = !my || this._q >= max;
     U.tip.textContent = !s.players[me].alive && this._shotPend !== me ? '你已出局，觀戰中' : my ? (s.bid ? '加價，或者開！' : `你先叫，至少 ${min} 個`) : '';
+  };
+
+  // 提示：照電腦的判斷把叫價面板調好（不自動送出）；建議開就閃「開！」鈕
+  L._hint = function () {
+    const U = this._ui, s = this.st, me = this._me; if (s.phase !== 'bid' || s.turn !== me || !s.players[me].alive) return;
+    const a = this.suggest(me), btn = a.open ? U.open : U.bid;
+    if (!a.open) { this._q = a.q; this._f = a.f; this._paintPanel(); }
+    Platform.fx.restart(btn, 'hint'); this._after(3000, () => btn.classList.remove('hint'));
+    Platform.toast(a.open ? '建議：開！' : `建議：叫 ${a.q} 個 ${a.f}`);
   };
 
   // ---------- 主渲染：依前後狀態差異觸發動畫 ----------
@@ -421,6 +436,23 @@ if (typeof Platform !== 'undefined') {
     id: 'liarsdice', name: '吹牛骰子', icon: '🎲',
     desc: '搖骰吹牛，1 點萬用；被抓包就玩俄羅斯輪盤', players: { min: 2, max: 4 },
     online: true,
+    rules: `<h3>每一輪</h3><ul>
+      <li>存活的人各搖一盅骰子（預設 5 顆，房間可設 3～5 顆），只看得到自己的。</li>
+      <li>起手者先叫「N 個 X 點」，之後依序輪流。</li></ul>
+      <h3>叫價</h3><ul>
+      <li>下一位必須加價：數量更多（點數任意），或數量相同但點數更大；不然就喊「開」。</li>
+      <li>點數大小：2 &lt; 3 &lt; 4 &lt; 5 &lt; 6 &lt; 1。</li>
+      <li>最少要叫「存活人數」個，最多不能超過場上骰子總數。</li></ul>
+      <h3>1 點萬用</h3><ul>
+      <li>1 可以當任何點數一起算。</li>
+      <li>這一輪只要有人叫過「N 個 1」，1 就不再萬用；叫 1 時只算 1 本身。</li></ul>
+      <h3>開！</h3><ul>
+      <li>掀開所有人的骰子計數：實際數量 ≥ 叫價 → 叫價成立，開的人輸；不足 → 叫價的人輸。</li></ul>
+      <h3>俄羅斯輪盤</h3><ul>
+      <li>每人一把左輪，6 膛 1 發；輸的人扣一次扳機，擊發數整場累積。</li>
+      <li>中彈就淘汰，最後存活的人獲勝。</li>
+      <li>下一輪由輸家起手；輸家淘汰時由他的下一位存活者起手。</li>
+      <li>行動逾時由電腦代打一步。💡 提示會照電腦的判斷幫你調好叫價（或閃「開！」），不會自動送出。</li></ul>`,
     target: L, settings: [{ k: 'DICE', label: '每人骰數', def: 5, options: [3, 4, 5], fmt: v => `${v} 顆` }, Platform.COMMON_CFG.turn, Platform.COMMON_CFG.ai],
     mount(stage, opts) {
       const root = document.createElement('div'); root.id = 'ld-root'; root.className = 'ld-root'; stage.appendChild(root);

@@ -176,9 +176,14 @@ const BigTwo = {
   // ---------- AI ----------
   aiAct(i) {
     const s = this.st; if (!s || s.phase !== 'play' || s.turn !== i) return;
-    const p = s.players[i], must = this.club3();
+    const pick = this.suggest(i);
+    pick ? this.play(i, pick) : this.pass(i);
+  },
+  // 建議出的牌（不出牌，回傳 null = 過）；只用自己手牌與公開資訊（他人張數），提示鈕也用
+  suggest(i) {
+    const s = this.st, p = s.players[i], must = this.club3();
     const plays = this.legalPlays(p.hand, s.table, must, this.baoPai(i));
-    if (!plays.length) { this.pass(i); return; }
+    if (!plays.length) return null;
     const minOpp = Math.min(...s.players.filter((q, k) => k !== i).map(q => q.hand.length));
     const score = cs => { const t = this.classify(cs); const base = t.type === 'single' || t.type === 'pair' ? 0 : 100 + this.FIVE_ORDER.indexOf(t.type) * 20;
       return base + (t.key[0] || 0) - cs.length * 3; };
@@ -188,14 +193,14 @@ const BigTwo = {
         : plays.filter(cs => cs.length === 5 && !this.isBomb(this.classify(cs))).sort((a, b) => score(a) - score(b))[0]
           || plays.filter(cs => cs.length === 2).sort((a, b) => score(a) - score(b))[0]
           || plays.sort((a, b) => score(a) - score(b))[0];
-      this.play(i, pick); return;
+      return pick;
     }
     // 跟牌：用剛好壓得過的最小組合；捨不得拆 2/炸彈時（手牌多、對手還遠）就過
     const sorted = plays.sort((a, b) => score(a) - score(b));
     const pick = sorted[0], t = this.classify(pick);
     const precious = this.isBomb(t) || pick.some(c => c.r === '2');
-    if (precious && minOpp > 4 && p.hand.length > 5 && Math.random() < .7) { this.pass(i); return; }
-    this.play(i, pick);
+    if (precious && minOpp > 4 && p.hand.length > 5 && Math.random() < .7) return null;
+    return pick;
   },
 
   cardName(c) { return ({ s: '♠', h: '♥', d: '♦', c: '♣' }[c.s]) + c.r; },
@@ -392,7 +397,7 @@ if (typeof Platform !== 'undefined') {
           <div class="b2-chips" role="group" aria-label="牌型快捷">${TYPES.map(t => `<button class="b2-chip" data-t="${t}" disabled>${B.TYPE_NAME[t]}<b></b></button>`).join('')}</div>
           <div class="b2-hand"></div>
         </div>
-        <div class="b2-acts"><button class="b2-act b2-pass" disabled>過</button><button class="b2-act primary b2-play" disabled>出牌</button></div>
+        <div class="b2-acts"><button class="b2-act b2-hint" hidden>💡 提示</button><button class="b2-act b2-pass" disabled>過</button><button class="b2-act primary b2-play" disabled>出牌</button></div>
       </section>
       <div class="b2-result" aria-live="polite"><div class="b2-rbox"></div></div>
       <aside class="b2-log" aria-label="牌局紀錄"><h2>牌局紀錄 <button class="b2-ibtn b2-logx" aria-label="關閉">✕</button></h2><ul></ul></aside>
@@ -401,7 +406,7 @@ if (typeof Platform !== 'undefined') {
     const U = this._ui = {
       app: q('.b2-app'), hno: q('.b2-hno'), status: q('.b2-status'), type: q('.b2-type'), deck: q('.b2-deck'),
       seat: [q('.b2-me'), ...[1, 2, 3].map(p => q(`.b2-seat[data-p="${p}"]`))], spot: [0, 1, 2, 3].map(p => q(`.b2-spot[data-p="${p}"]`)),
-      hand: q('.b2-hand'), tip: q('.b2-tip'), chips: [...root.querySelectorAll('.b2-chip')], play: q('.b2-play'), pass: q('.b2-pass'),
+      hand: q('.b2-hand'), tip: q('.b2-tip'), chips: [...root.querySelectorAll('.b2-chip')], play: q('.b2-play'), pass: q('.b2-pass'), hint: q('.b2-hint'),
       result: q('.b2-result'), rbox: q('.b2-rbox'), log: q('.b2-log'), logList: q('.b2-log ul'),
     };
     U.ava = U.seat.map(e => e.querySelector('.b2-ava')); U.bub = U.seat.map(e => e.querySelector('.b2-bub'));
@@ -461,6 +466,7 @@ if (typeof Platform !== 'undefined') {
     U.app.classList.toggle('nobeat', nobeat);
     U.play.disabled = !ok; U.play.textContent = ok ? `出 ${B.TYPE_NAME[t.type]}` : '出牌';
     U.pass.disabled = !(myTurn && s.table); U.pass.textContent = nobeat ? '沒牌可壓・過' : '過';
+    U.hint.hidden = !myTurn; // 提示鈕：輪到自己才出現
     U.tip.className = 'b2-tip' + ((cards.length && !ok) || nobeat ? ' bad' : '');
     U.tip.textContent = nobeat ? `壓不過 ${s.players[s.table.by].name} 的${B.TYPE_NAME[s.table.t.type]}，3 秒後自動過`
       : !cards.length ? (myTurn ? (s.table ? `要壓過 ${s.players[s.table.by].name} 的${B.TYPE_NAME[s.table.t.type]}` : must ? '第一手要含梅花 3' : '你有出牌權，出什麼都可以') + (bao ? '（下家報牌，單張要出最大）' : '') : '')
@@ -482,6 +488,15 @@ if (typeof Platform !== 'undefined') {
     const i = this._cyc[tp] = ((this._cyc[tp] ?? -1) + 1) % list.length;
     this._sel = new Set(list[i].map(key)); this.sfx.play('slide', { gain: .25, rate: 1.3 }); this._paintSel();
     const cyc = this._cyc[tp]; this._cyc = { [tp]: cyc };
+  };
+
+  // 提示：照電腦的選法幫你選好牌（不自動出）；電腦會過就閃「過」鈕
+  B._hint = function () {
+    const U = this._ui, s = this.st, me = this._me; if (s.phase !== 'play' || s.turn !== me) return;
+    const pick = B.suggest(me), btn = pick ? U.play : U.pass;
+    if (pick) { this._sel = new Set(pick.map(key)); this._cyc = {}; this._paintSel(); }
+    Platform.fx.restart(btn, 'hint'); this._after(3000, () => btn.classList.remove('hint'));
+    Platform.toast(pick ? `建議：${B.TYPE_NAME[B.classify(pick).type]} ${pick.map(c => B.cardName(c)).join(' ')}` : '建議：過');
   };
 
   // ---------- 閃電：從畫面上方劈向 target（贏牌 / 炸彈）；stamp = 中央印章文字 ----------
@@ -642,6 +657,24 @@ if (typeof Platform !== 'undefined') {
     id: 'bigtwo', name: '大老二', icon: '🂡',
     desc: '台灣大老二：對子、順子、葫蘆、鐵支炸彈', players: { min: 2, max: 4 },
     online: true,
+    rules: `<h3>牌的大小</h3><ul>
+      <li>點數：3 &lt; 4 &lt; … &lt; K &lt; A &lt; 2；同點比花色：梅花 &lt; 方塊 &lt; 紅心 &lt; 黑桃。</li>
+      <li>4 人各 13 張，每局由持梅花 3 的人先出，第一手必須包含梅花 3。</li></ul>
+      <h3>牌型</h3><ul>
+      <li>單張、對子、五張牌（順子、葫蘆、鐵支、同花順）；不能單出三條，也沒有同花。</li>
+      <li>順子：23456 最大、10JQKA 第二，其餘比最大一張，A2345 最小；JQKA2、QKA23、KA234 不算順子。同大小再比最大那張的花色。</li>
+      <li>葫蘆、鐵支比三張／四張的點數。</li>
+      <li>只有相同牌型才能互壓（葫蘆不能壓順子）。</li>
+      <li>炸彈：鐵支（四條帶一張）、同花順可以壓任何牌型，包括單張和對子；同花順 &gt; 鐵支。</li></ul>
+      <h3>出牌與過</h3><ul>
+      <li>輪到你就出比桌上更大的同牌型，或選擇「過」。</li>
+      <li>這一輪過了就不能再出；其他人都過後，最後出牌的人取得出牌權，可出任何牌型。</li>
+      <li>報牌：下家只剩 1 張時，你出單張必須出手上最大的那張。</li>
+      <li>壓不過時 3 秒後自動過；行動逾時由電腦代打一步。</li></ul>
+      <h3>結算</h3><ul>
+      <li>先出完的人贏，其他人依剩餘張數計點：剩 10 張以上 ×2、13 張全沒出 ×3，手上有 2 再 ×2。</li>
+      <li>點數 × 每點金額付給贏家（籌碼不夠就付光）；有人籌碼輸光整場結束，籌碼最多者勝。</li>
+      <li>💡 提示：依電腦的出法幫你選好牌（電腦會過時閃「過」鈕），不會自動出。</li></ul>`,
     target: B, settings: [{ k: 'START', label: '起始籌碼', def: 1000, options: [500, 1000, 5000, 10000], fmt: Platform.money },
       { k: 'UNIT', label: '每點金額', def: 10, options: [1, 5, 10, 50, 100], fmt: v => `${Platform.money(v)}/點` }, Platform.COMMON_CFG.turn, Platform.COMMON_CFG.ai],
     mount(stage, opts) {
@@ -652,6 +685,7 @@ if (typeof Platform !== 'undefined') {
       root.addEventListener('click', e => {
         const U = B._ui; if (!U) return;
         const chip = e.target.closest('.b2-chip'); if (chip && !chip.disabled) { B._pickType(chip.dataset.t); return; }
+        if (e.target === U.hint) { B._hint(); return; }
         if (e.target === U.play && !U.play.disabled) { const hand = B.st.players[B._me].hand.filter(known); B._send('play', hand.filter(c => B._sel.has(key(c)))); return; }
         if (e.target === U.pass && !U.pass.disabled) B._send('pass');
       });

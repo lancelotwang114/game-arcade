@@ -201,9 +201,21 @@ body {
   background: rgba(12,10,8,.96); color: var(--ink); box-shadow: 0 10px 30px rgba(0,0,0,.6); }
 .hud-volpop input { width: 160px; min-height: 44px; accent-color: var(--gold); }
 .hud-volpop b { min-width: 3em; text-align: right; color: var(--gold2); font: 700 15px 'Oswald', 'Noto Sans TC', sans-serif; }
-.hud-volrow { display: flex; align-items: center; gap: 8px; }
+.hud-volrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .hud-tg { flex: 1; min-height: 44px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,.4); color: var(--ink); font: 500 14px 'Noto Sans TC', sans-serif; cursor: pointer; }
 .hud-tg[aria-pressed="true"] { border-color: var(--gold); color: var(--gold2); }
+/* 玩法說明 */
+.hud-rules { text-align: left; max-width: min(520px, 84vw); max-height: 60vh; overflow: auto; font-size: 15px; line-height: 1.7; }
+.hud-rules h3 { margin: 12px 0 4px; font-size: 16px; color: var(--accent, var(--gold2)); } .hud-rules ul { margin: 4px 0; padding-left: 1.3em; }
+/* 互動道具：選單＋飛行物 */
+.hud-pick { position: fixed; z-index: 175; display: flex; gap: 6px; padding: 6px; border: 1px solid var(--gold); border-radius: 14px; background: rgba(12,10,8,.95); box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+.hud-pick button { width: 46px; height: 46px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.04); font-size: 24px; cursor: pointer; }
+.hud-pick button:hover, .hud-pick button:focus-visible { border-color: var(--gold); background: rgba(231,196,110,.15); }
+.hud-fly { position: fixed; left: 0; top: 0; z-index: 172; font-size: 34px; pointer-events: none; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+.hud-fly.hit { animation: hudHit .7s ease-out forwards; }
+@keyframes hudHit { 0% { scale: 1; opacity: 1; } 40% { scale: 1.8; } 100% { scale: 1.2; opacity: 0; } }
+.hud-splat { animation: hudShake .45s; } @keyframes hudShake { 25% { translate: -4px 0; } 75% { translate: 4px 0; } }
+@media (prefers-reduced-motion: reduce) { .hud-fly.hit, .hud-splat { animation: none; } }
 /* 暫停遮罩 */
 .hud-pause { position: absolute; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(0,0,0,.62); }
 .hud-pbox { text-align: center; padding: 22px 30px; border: 1px solid var(--gold); border-radius: 16px; background: rgba(12,10,8,.95); color: var(--ink); }

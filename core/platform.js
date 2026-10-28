@@ -21,7 +21,7 @@ const Platform = {
     if (lobby) lobby.style.display = 'none';
     if (stage) { stage.style.display = 'block'; stage.innerHTML = ''; }
     if (back)  back.style.display = 'block';
-    this._active = g;
+    this._active = g; this._keepAwake(true);
     try { g.mount(stage, opts); }
     catch (e) { console.error('mount failed', e); this.toast && this.toast('遊戲載入失敗'); this.exit(); }
   },
@@ -100,6 +100,7 @@ const Platform = {
       this._active = null;
     }
     if (this.ui && this.ui.turnClock) this.ui.turnClock(null);
+    this._keepAwake(false);
     if (this.net && this.net.peer) { if (keepNet) this.net.handlers = {}; else this.net.reset(); }
     const lobby = document.getElementById('lobby');
     const stage = document.getElementById('stage');
@@ -155,6 +156,18 @@ const Platform = {
         { label: '取消' },
       ],
     });
+  },
+
+  // 打牌時螢幕不休眠（Screen Wake Lock；不支援的瀏覽器就略過）。切到背景會自動失效，回來再要一次
+  _wake: null,
+  _keepAwake(on) {
+    if (!('wakeLock' in navigator)) return;
+    if (!on) { if (this._wake) this._wake.release().catch(() => {}); this._wake = null; return; }
+    if (this._wake && !this._wake.released) return;
+    if (this._wakeReq) return; this._wakeReq = true; // 請求中不重複要（否則先拿到的那支沒人 release）
+    navigator.wakeLock.request('screen').then(l => { this._wakeReq = false;
+      if (!this._active || (this._wake && !this._wake.released)) { l.release().catch(() => {}); return; } // 已離開遊戲／已有一支：放掉
+      this._wake = l; }).catch(() => { this._wakeReq = false; });
   },
 
   // localStorage JSON 包裝
@@ -213,6 +226,8 @@ function renderRoomBar() {
     : `<span>🌐 等待房主選擇下一款遊戲…</span><button class="btn">離開房間</button>`;
   bar.querySelector('button').onclick = () => { n.reset(); renderRoomBar(); };
 }
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Platform._active) Platform._keepAwake(true); });
 
 window.addEventListener('DOMContentLoaded', () => {
   renderLobby();

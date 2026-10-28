@@ -170,6 +170,11 @@
 .tx-btn:disabled { opacity: .35; cursor: default; }
 .tx-app.myturn .tx-btn.primary:not(:disabled) { box-shadow: 0 6px 22px var(--glow); }
 .tx-btn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+/* 預選動作：未輪到你時取代操作鈕；按下的那顆亮色 */
+.tx-pre { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tx-pre[hidden], .tx-acts[hidden] { display: none; }
+.tx-pre .tx-btn { font-size: 16px; }
+.tx-pre .tx-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 
 /* 加注面板：按「加注」才展開，按「確認」才送出 */
 .tx-raise { display: none; position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); gap: 10px; padding: 12px; border-radius: 14px;

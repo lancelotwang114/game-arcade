@@ -46,6 +46,7 @@ Platform.hud = {
     const orig = G._after; this._orig = orig; G._paused = false;
     G._after = (ms, fn) => orig.call(G, ms, () => { if (G._paused) this._held.push(fn); else fn(); });
     this._buildBar(); this._buildChat();
+    this._throwClick = e => this._onSeatTap(e); o.root.addEventListener('click', this._throwClick); // 點對手頭像丟互動道具
     this._key = e => {
       const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -60,8 +61,9 @@ Platform.hud = {
     const G = this.G; if (!G) return;
     if (this._orig) G._after = this._orig; G._paused = false;
     document.removeEventListener('keydown', this._key);
-    [this._tools, this._bMore, this._chat, this._pauseOv, this._volBox].forEach(el => el && el.remove());
-    this._tools = this._bMore = this._chat = this._pauseOv = this._volBox = this._volIn = null;
+    if (this.o && this.o.root) this.o.root.removeEventListener('click', this._throwClick);
+    [this._tools, this._bMore, this._chat, this._pauseOv, this._volBox, this._pick].forEach(el => el && el.remove());
+    this._tools = this._bMore = this._chat = this._pauseOv = this._volBox = this._volIn = this._pick = null;
     Platform.voice._stop();
     this.G = this.o = null;
   },
@@ -93,6 +95,7 @@ Platform.hud = {
     this._bVol.addEventListener('wheel', e => { e.preventDefault(); this.setVol(Platform.audio.vol + (e.deltaY < 0 ? .1 : -.1)); }, { passive: false });
     this._bPause = btn('pause', '暫停', '⏸', '暫停／繼續（P）', () => this.setPause(!this.G._paused));
     this._bChat = btn('chat', '聊天', '💬', '聊天（C）', () => this.toggleChat());
+    if (Platform._active && Platform._active.rules) btn('rules', '玩法', '📖', '玩法說明', () => this.showRules());
     btn('bug', '錯誤回報', '🐞', '複製除錯紀錄（遇到錯誤時按，再貼給房主）', () => this.copyReport());
     box.addEventListener('click', e => { if (e.target.closest('.hud-ic')) box.classList.remove('open'); }); // 窄螢幕下拉：點了就收起
     const own = [...bar.querySelectorAll(':scope > button')]; // 遊戲原有圖示：一起收進工具列（桌機照常一排；手機一起進「選單」）
@@ -114,7 +117,8 @@ Platform.hud = {
     if (this._volBox) { this._volBox.remove(); this._volBox = this._volIn = null; return; }
     const box = this._volBox = document.createElement('div'); box.className = 'hud-volpop';
     box.innerHTML = '<div class="hud-volrow"><span>🔈</span><input type="range" min="0" max="100" step="5" aria-label="音量"><span>🔊</span><b></b></div>'
-      + '<div class="hud-volrow"><button class="hud-tg" data-k="snd"></button><button class="hud-tg" data-k="voice"></button></div>';
+      + '<div class="hud-volrow"><button class="hud-tg" data-k="snd"></button><button class="hud-tg" data-k="voice"></button>'
+      + (navigator.vibrate ? '<button class="hud-tg" data-k="vib"></button>' : '') + '</div>'; // 不支援震動的裝置（iPhone）不顯示
     const inp = this._volIn = box.querySelector('input'); inp.value = Math.round(Platform.audio.vol * 100);
     inp.oninput = () => this.setVol(inp.value / 100);
     box.querySelector('[data-k="snd"]').onclick = () => { // 原本各遊戲右上的「音效」鈕併到這裡
@@ -122,6 +126,7 @@ Platform.hud = {
       const sfx = this.G && this.G.sfx; if (sfx && sfx.ambience) sfx.ambience(on); // 有環境音的遊戲（騙子酒吧、吹牛骰子）一起開關
       this.sync();
     };
+    const vb = box.querySelector('[data-k="vib"]'); if (vb) vb.onclick = () => { const on = !Platform.store.get('arcade_vib', true); Platform.store.set('arcade_vib', on); if (on) Platform.fx.buzz(40); this.sync(); };
     box.querySelector('[data-k="voice"]').onclick = () => { Platform.voice.setEnabled(!Platform.voice.enabled); if (Platform.voice.enabled) Platform.voice.say('語音報牌開啟'); this.sync(); };
     box.addEventListener('wheel', e => { e.preventDefault(); this.setVol(Platform.audio.vol + (e.deltaY < 0 ? .1 : -.1)); }, { passive: false });
     const r = this._bVol.getBoundingClientRect(), shown = r.width > 0; // 手機下拉收起後按鈕不可見：改貼右上
@@ -147,6 +152,7 @@ Platform.hud = {
       const tg = (k, on, text) => { const b = this._volBox.querySelector(`[data-k="${k}"]`); b.textContent = text; b.setAttribute('aria-pressed', String(on)); };
       tg('snd', snd, snd ? '🔊 音效：開' : '🔇 音效：關');
       tg('voice', Platform.voice.enabled, Platform.voice.enabled ? '🗣 語音報牌：開' : '🔕 語音報牌：關');
+      if (this._volBox.querySelector('[data-k="vib"]')) { const v = Platform.store.get('arcade_vib', true); tg('vib', v, v ? '📳 震動：開' : '📴 震動：關'); }
     }
     this._bPause.hidden = !host; this._bPause.textContent = G._paused ? '▶' : '⏸'; this._bPause.classList.toggle('on', !!G._paused);
   },
@@ -237,12 +243,79 @@ Platform.hud = {
     clearTimeout(b._t); b._t = setTimeout(() => b.classList.remove('on'), 2600);
   },
 
+  // ---------- 玩法說明：遊戲 register 時給 rules（HTML 字串，遊戲自己寫的固定文字） ----------
+  showRules() {
+    const g = Platform._active; if (!g || !g.rules) return;
+    Platform.ui.modal({ title: `${g.name} — 玩法`, html: `<div class="hud-rules">${g.rules}</div>`, buttons: [{ label: '知道了', primary: true }] });
+  },
+
+  // ---------- 互動道具：點對手頭像 → 選道具 → 從自己飛過去（連線時大家都看得到） ----------
+  ITEMS: { tomato: { e: '🍅', name: '番茄' }, rose: { e: '🌹', name: '玫瑰' }, beer: { e: '🍺', name: '乾杯' }, like: { e: '👍', name: '讚' } },
+  _onSeatTap(e) {
+    const G = this.G; if (!G || !G.st || !G.st.players || (G.O && !G.O.started)) return;
+    if (e.target.closest('button, input, .hud-pick')) return;
+    const me = this._me(), i = G.st.players.findIndex((p, k) => { const el = k !== me && this.o.seatEl(k); return !!el && el.contains(e.target); });
+    if (i < 0) return;
+    if (this._pick && this._pick._seat === i) return; // 已開著（騙子酒吧連點 7 下的彩蛋照常計數）
+    this._pickFor(i);
+  },
+  _pickFor(i) {
+    if (this._pick) this._pick.remove();
+    const box = this._pick = document.createElement('div'); box.className = 'hud-pick'; box._seat = i; box.setAttribute('role', 'menu');
+    box.setAttribute('aria-label', `丟道具給 ${this._name(i)}`);
+    box.innerHTML = Object.entries(this.ITEMS).map(([k, v]) => `<button role="menuitem" data-k="${k}" aria-label="${v.name}">${v.e}</button>`).join('');
+    const r = this.o.seatEl(i).getBoundingClientRect();
+    box.style.left = Math.max(8, Math.min(innerWidth - 216, r.left + r.width / 2 - 104)) + 'px';
+    box.style.top = (r.bottom + 64 > innerHeight ? r.top - 60 : r.bottom + 8) + 'px';
+    document.body.append(box); box.querySelector('button').focus();
+    const close = () => { if (this._pick === box) { box.remove(); this._pick = null; } document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', esc); };
+    const away = ev => { if (!box.contains(ev.target)) setTimeout(close); };
+    const esc = ev => { if (ev.key === 'Escape') close(); };
+    box.onclick = ev => { const b = ev.target.closest('button'); if (b) { this.throwItem(i, b.dataset.k); close(); } };
+    setTimeout(() => { document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', esc); });
+  },
+  throwItem(to, item) {
+    if (!Object.hasOwn(this.ITEMS, item)) return; // 只認自己定義的道具（擋 __proto__ 之類的鍵）
+    const now = Date.now(); if (now - (this._lastThrow || 0) < 1200) return; this._lastThrow = now; // 防洗版
+    const me = this._me();
+    if (!this._online()) {
+      this._fly(me, to, item);
+      const p = this.G.st.players[to]; // 單機：電腦偶爾回一句
+      if (p && p.isAI && Math.random() < .6) setTimeout(() => this.G && this.bubble(to, { tomato: '欸！', rose: '謝啦～', beer: '乾！', like: '嘿嘿' }[item]), 900);
+    } else if (this._isHost()) { this._fly(me, to, item); Platform.net.broadcast('hud', { kind: 'throw', from: me, to, item }); }
+    else Platform.net.sendHost('hud', { kind: 'throw', to, item });
+  },
+  _fly(from, to, item) {
+    const a = this.o && this.o.seatEl(from), b = this.o && this.o.seatEl(to), it = Object.hasOwn(this.ITEMS, item) && this.ITEMS[item]; if (!b || !it) return;
+    const rb = b.getBoundingClientRect(), ra = a ? a.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight, width: 0, height: 0 };
+    const el = document.createElement('div'); el.className = 'hud-fly'; el.textContent = it.e; el.setAttribute('aria-hidden', 'true');
+    document.body.append(el);
+    const x0 = ra.left + ra.width / 2, y0 = ra.top + ra.height / 2, x1 = rb.left + rb.width / 2, y1 = rb.top + rb.height / 2;
+    const end = `translate(${x1}px,${y1}px) translate(-50%,-50%)`;
+    const hit = () => {
+      if (el.classList.contains('hit')) return;
+      el.classList.add('hit'); setTimeout(() => el.remove(), 700);
+      if (item === 'tomato') { Platform.audio._noise(.18, .5, 300); b.classList.add('hud-splat'); setTimeout(() => b.classList.remove('hud-splat'), 900); }
+      else Platform.audio._tone(item === 'beer' ? 1400 : 980, .12, 'sine', .25);
+    };
+    el.style.transform = end;
+    if (Platform.fx.reduced()) { hit(); return; }
+    const mid = `translate(${(x0 + x1) / 2}px,${Math.min(y0, y1) - 90}px) translate(-50%,-50%) rotate(180deg) scale(1.3)`;
+    el.animate([{ transform: `translate(${x0}px,${y0}px) translate(-50%,-50%)` }, { transform: mid }, { transform: end + ' rotate(360deg)' }],
+      { duration: 650, easing: 'cubic-bezier(.3,.6,.4,1)' }).onfinish = hit;
+    setTimeout(hit, 900); // 背景分頁動畫不跑時也要結束
+  },
+
   // ---------- 連線 ----------
   _onNet(d, from) {
     const G = this.G; if (!G || !G.O) return;
     if (G.O.isHost) { // 房主：處理賓客的請求，聊天轉發給所有人（賓客彼此沒有直連）
       const seat = G.O.seatOf[from]; if (seat == null) return;
       if (d.kind === 'auto') this.setAuto(seat, d.on);
+      if (d.kind === 'throw' && Object.hasOwn(this.ITEMS, d.item) && G.st && G.st.players[+d.to] && +d.to !== seat) {
+        const now = Date.now(); this._thr = this._thr || {}; if (now - (this._thr[seat] || 0) < 1200) return; this._thr[seat] = now; // 每人防洗版
+        this._fly(seat, +d.to, d.item); Platform.net.broadcast('hud', { kind: 'throw', from: seat, to: +d.to, item: d.item });
+      }
       if (d.kind === 'chat' || d.kind === 'shout') {
         const shout = d.kind === 'shout', text = this._clean(d.text, shout ? 6 : 60); if (!text) return;
         const name = this._name(seat); this._recv(seat, name, text, shout);
@@ -252,6 +325,7 @@ Platform.hud = {
     }
     if (from !== Platform.net.hostId) return; // 賓客只認房主
     if (d.kind === 'pause') this._applyPause(d.on);
+    if (d.kind === 'throw' && Object.hasOwn(this.ITEMS, d.item)) this._fly(+d.from, +d.to, d.item);
     if (d.kind === 'chat' || d.kind === 'shout') this._recv(+d.seat, d.name, this._clean(d.text, d.kind === 'shout' ? 6 : 60), d.kind === 'shout');
   },
 

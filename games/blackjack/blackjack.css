@@ -88,6 +88,10 @@
 .bj-btn.pri { background: var(--primary); color: var(--accent-ink); border: 0; font-size: 18px; min-height: 56px; }
 .bj-cbtn { width: 56px; height: 56px; border-radius: 50%; border: 5px dashed rgba(255,255,255,.85); font: 700 15px var(--o); color: #fff; box-shadow: 0 3px 8px rgba(0,0,0,.5); text-shadow: 0 1px 2px #000; }
 .bj-amt { font: 700 26px var(--o); color: var(--accent); min-width: 3.4em; text-align: center; }
+/* 💡 提示：建議的按鈕閃外框 */
+.bj-btn.bj-hintbtn { min-width: 0; padding: 0 14px; }
+.bj-btn.hint { outline: 3px solid var(--accent); outline-offset: 2px; animation: bj-hint .7s ease-in-out infinite alternate; }
+@keyframes bj-hint { to { outline-offset: 6px; outline-color: transparent; } }
 
 /* 紀錄 */
 .bj-log { position: absolute; z-index: 30; top: 0; right: 0; bottom: 0; width: min(320px, 86vw); background: rgba(24,6,8,.97); border-left: 1px solid var(--line); padding: 16px; transform: translateX(100%); transition: transform .3s; overflow-y: auto; }
@@ -105,6 +109,8 @@
   .bj-hands { gap: 8px; }
   .bj-dock { gap: 8px; padding: 6px 8px calc(8px + env(safe-area-inset-bottom)); }
   .bj-btn { min-width: 72px; flex: 1 1 0; padding: 0 6px; font-size: 16px; } .bj-cbtn { width: 50px; height: 50px; } .bj-amt { font-size: 22px; min-width: 2.8em; }
+  /* 多了提示鈕：五顆擠一排不換行 */
+  .bj-dock:has(.bj-hintbtn) .bj-btn { min-width: 60px; } .bj-btn.bj-hintbtn { flex: 0 0 48px; min-width: 48px; padding: 0; } .bj-hintbtn .bj-lbl { display: none; }
 }
 /* 矮手機直拿（如 375×667） */
 @media (orientation: portrait) and (max-height: 720px) {
@@ -130,4 +136,5 @@
 @media (prefers-reduced-motion: reduce) {
   .bj-root *, .bj-root *::before, .bj-root *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .bj-root .bj-ava { animation: none !important; }
+  .bj-root .bj-btn.hint { animation: none !important; } /* 靜態外框 */
 }
